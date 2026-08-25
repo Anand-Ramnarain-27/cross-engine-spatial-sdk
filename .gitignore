@@ -1,0 +1,45 @@
+# Build output
+build/
+build-*/
+out/
+bin/
+obj/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+_deps/
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj*
+*.suo
+*.user
+
+# Visual Studio Code
+.vscode/
+
+# JetBrains (CLion / Rider)
+.idea/
+
+# Unity
+examples/UnityDemo/Library/
+examples/UnityDemo/Temp/
+examples/UnityDemo/Obj/
+examples/UnityDemo/Logs/
+examples/UnityDemo/UserSettings/
+*.csproj
+*.unityproj
+
+# Unreal
+examples/UnrealDemo/Binaries/
+examples/UnrealDemo/Intermediate/
+examples/UnrealDemo/DerivedDataCache/
+examples/UnrealDemo/Saved/
+
+# OS
+Thumbs.db
+.DS_Store
