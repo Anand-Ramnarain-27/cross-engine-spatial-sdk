@@ -1,12 +1,12 @@
 // StandaloneViewer — the SDK's first complete demonstration: a real
-// window, a real D3D11 IRenderer backend, and StreamingManager + LODManager
-// + DebugRenderer wired together against a real dataset on disk.
+// window, a real D3D11 IRenderer backend, and spatial::SpatialWorld (which
+// itself wires StreamingManager + LODManager + GPUUploadQueue +
+// DebugRenderer together) driving a real dataset on disk.
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
 
-#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -14,15 +14,9 @@
 #include <optional>
 #include <string>
 #include <type_traits>
-#include <unordered_map>
-#include <vector>
 
+#include "spatial/SpatialWorld.h"
 #include "spatial/data/DatasetSerializer.h"
-#include "spatial/data/TileIndex.h"
-#include "spatial/debug/DebugRenderer.h"
-#include "spatial/lod/LODManager.h"
-#include "spatial/rendering/GPUUploadQueue.h"
-#include "spatial/streaming/StreamingManager.h"
 
 #include "D3D11Renderer.h"
 #include "FlyCamera.h"
@@ -30,11 +24,7 @@
 
 using namespace spatial;
 using namespace spatial::core;
-using namespace spatial::data;
 using namespace spatial::streaming;
-using namespace spatial::rendering;
-using namespace spatial::lod;
-using namespace spatial::debug;
 using namespace viewer;
 
 namespace
@@ -196,33 +186,8 @@ namespace
             std::cerr << "--dataset is required\n";
             return std::nullopt;
         }
-        if (options.tilesDir.empty())
-        {
-            options.tilesDir = options.datasetManifest.parent_path() / "tiles";
-        }
         return options;
     }
-
-    // GPU-side state for one resident tile: every LOD's meshes uploaded up
-    // front (the tile file already contains all of them — see
-    // docs/lod.md), plus the tile's materials. Which LOD actually gets
-    // drawn each frame is chosen at draw time by LODManager.
-    struct TileGPU
-    {
-        std::vector<std::vector<MeshResource>> lodMeshes;
-        std::vector<MaterialResource> materials;
-        std::size_t pendingUploads = 0;
-        // False once the tile is no longer resident. The map entry itself
-        // is kept alive until pendingUploads reaches 0: upload callbacks
-        // capture a reference to this struct, and callbacks already queued
-        // can still fire after the tile stops being desired (a tile can be
-        // evicted before an in-flight upload for it completes) — erasing
-        // the entry early would leave those callbacks holding a dangling
-        // reference.
-        bool stillResident = true;
-
-        [[nodiscard]] bool ready() const noexcept { return pendingUploads == 0; }
-    };
 
     std::wstring toWide(const std::string& s) { return std::wstring(s.begin(), s.end()); }
 }
@@ -243,49 +208,50 @@ int main(int argc, char** argv)
     }
     const Options& options = *parsedOptions;
 
-    const Expected<DatasetManifest> manifestResult = DatasetSerializer::loadManifest(options.datasetManifest);
-    if (!manifestResult.hasValue())
+    SpatialWorldConfig worldConfig{};
+    worldConfig.streaming.streamingRadius = options.streamingRadius;
+    worldConfig.streaming.workerThreadCount = options.workerThreads;
+    worldConfig.streaming.memoryBudget.maxResidentTiles = options.maxResidentTiles;
+    worldConfig.streaming.memoryBudget.cpuBudgetBytes = static_cast<std::size_t>(options.cpuBudgetMB) * 1024ull * 1024ull;
+    if (!options.tilesDir.empty())
     {
-        std::cerr << "Failed to load dataset manifest: " << manifestResult.error().message << "\n";
+        worldConfig.tilesDirectory = options.tilesDir;
+    }
+
+    // Fail fast on a bad dataset path before opening a window. The real
+    // load happens again below, once `renderer` exists — see the
+    // declaration-order note there for why.
+    const Expected<data::DatasetManifest> preflightManifest = data::DatasetSerializer::loadManifest(options.datasetManifest);
+    if (!preflightManifest.hasValue())
+    {
+        std::cerr << "Failed to load dataset: " << preflightManifest.error().message << "\n";
         return 1;
     }
-    const DatasetManifest& manifest = manifestResult.value();
-
-    const Expected<TileIndex> indexResult = TileIndex::buildUniformGrid(manifest);
-    if (!indexResult.hasValue())
-    {
-        std::cerr << "Failed to build tile index: " << indexResult.error().message << "\n";
-        return 1;
-    }
-    const TileIndex& tileIndex = indexResult.value();
-
-    std::cout << "Loaded dataset \"" << manifest.name << "\" (" << tileIndex.size() << " tiles, "
-              << options.tilesDir << ")\n";
+    std::cout << "Loaded dataset \"" << preflightManifest.value().name << "\"\n";
 
     try
     {
-        Win32Window window(L"Spatial SDK - Standalone Viewer - " + toWide(manifest.name), options.width, options.height);
+        Win32Window window(L"Spatial SDK - Standalone Viewer - " + toWide(preflightManifest.value().name), options.width, options.height);
         D3D11Renderer renderer(window.handle(), options.width, options.height, options.assetsDir / "shaders");
 
-        StreamingConfig streamConfig{};
-        streamConfig.streamingRadius = options.streamingRadius;
-        streamConfig.workerThreadCount = options.workerThreads;
-        streamConfig.memoryBudget.maxResidentTiles = options.maxResidentTiles;
-        streamConfig.memoryBudget.cpuBudgetBytes = static_cast<std::size_t>(options.cpuBudgetMB) * 1024ull * 1024ull;
-
-        StreamingManager streamingManager(tileIndex, makeFileTileLoader(options.tilesDir), streamConfig);
-        LODManager<TileId> lodManager;
-        GPUUploadQueue uploadQueue;
-        DebugRenderer debugRenderer(renderer);
+        // `world` must be declared after `renderer`: its GPU resources hold
+        // pointers into `renderer`, so it must be destroyed first — on
+        // every exit path, including an exception unwinding this scope,
+        // not just the normal one. Declaration order (reverse-order
+        // destruction) guarantees that; an explicit shutdown() call before
+        // the end of this block would not cover the exception path.
+        SpatialWorld world;
+        const Expected<void> loadResult = world.loadDataset(options.datasetManifest, worldConfig);
+        if (!loadResult.hasValue())
+        {
+            std::cerr << "Failed to load dataset: " << loadResult.error().message << "\n";
+            return 1;
+        }
 
         FlyCamera camera;
-        camera.position = Vec3{0.0f, manifest.tileSize * 0.5f, manifest.worldSize * 0.3f};
-
-        std::unordered_map<TileId, TileGPU> gpuTiles;
-        bool showDebugBounds = true;
+        camera.position = Vec3{0.0f, world.datasetManifest().tileSize * 0.5f, world.datasetManifest().worldSize * 0.3f};
 
         constexpr float kFovYRadians = 1.0471975512f; // 60 degrees
-        constexpr std::size_t kMaxUploadsPerFrame = 8;
 
         const auto startTime = std::chrono::steady_clock::now();
         auto lastFrameTime = startTime;
@@ -303,7 +269,7 @@ int main(int argc, char** argv)
             }
             if (window.consumeKeyPressed(VK_F1))
             {
-                showDebugBounds = !showDebugBounds;
+                world.setDebugVisualizationEnabled(!world.debugVisualizationEnabled());
             }
 
             Vec3 localMove{0, 0, 0};
@@ -327,161 +293,27 @@ int main(int argc, char** argv)
             }
 
             const CameraParams cameraParams = camera.toCameraParams(static_cast<float>(window.height()), kFovYRadians);
-            streamingManager.update(cameraParams);
-
-            // Enqueue GPU uploads for tiles that just became resident.
-            for (const TileId& id : streamingManager.residentTileIds())
-            {
-                if (const auto existing = gpuTiles.find(id); existing != gpuTiles.end())
-                {
-                    // Revive an entry that was mid-eviction-cleanup (its
-                    // pending uploads hadn't finished yet) rather than
-                    // leaving it stuck un-rendered.
-                    existing->second.stillResident = true;
-                    continue;
-                }
-                const Tile* tile = streamingManager.residentTile(id);
-                if (tile == nullptr)
-                {
-                    continue;
-                }
-
-                TileGPU& gpu = gpuTiles[id];
-                gpu.lodMeshes.resize(tile->lods().size());
-
-                std::size_t total = tile->materials().size();
-                for (const TileLOD& lod : tile->lods())
-                {
-                    total += lod.meshes.size();
-                }
-                gpu.pendingUploads = total;
-
-                for (const Material& material : tile->materials())
-                {
-                    uploadQueue.enqueueMaterial(material, [&gpu](MaterialResource resource) {
-                        gpu.materials.push_back(std::move(resource));
-                        --gpu.pendingUploads;
-                    });
-                }
-                for (std::size_t lodIndex = 0; lodIndex < tile->lods().size(); ++lodIndex)
-                {
-                    for (const Mesh& mesh : tile->lods()[lodIndex].meshes)
-                    {
-                        uploadQueue.enqueueMesh(mesh, [&gpu, lodIndex](MeshResource resource) {
-                            gpu.lodMeshes[lodIndex].push_back(std::move(resource));
-                            --gpu.pendingUploads;
-                        });
-                    }
-                }
-            }
-
-            // Mark GPU data for tiles the streaming manager no longer
-            // considers resident, but only actually erase once every
-            // upload callback that captured a reference to it has fired.
-            for (auto& [id, gpu] : gpuTiles)
-            {
-                if (streamingManager.stateOf(id) != ResourceState::Resident)
-                {
-                    gpu.stillResident = false;
-                }
-            }
-            for (auto it = gpuTiles.begin(); it != gpuTiles.end();)
-            {
-                if (!it->second.stillResident && it->second.ready())
-                {
-                    it = gpuTiles.erase(it);
-                }
-                else
-                {
-                    ++it;
-                }
-            }
-
-            uploadQueue.processQueue(renderer, kMaxUploadsPerFrame);
+            world.update(cameraParams, renderer);
 
             const Mat4 view = camera.viewMatrix();
             const Mat4 proj = Mat4::perspective(
                 kFovYRadians, static_cast<float>(window.width()) / static_cast<float>(window.height()), 0.5f, 6000.0f);
-            const Mat4 viewProj = proj * view;
 
             renderer.clear(0.53f, 0.70f, 0.90f);
-            renderer.beginFrame(viewProj);
-
-            for (const auto& [id, gpu] : gpuTiles)
-            {
-                if (!gpu.ready() || !gpu.stillResident)
-                {
-                    continue;
-                }
-                const Tile* tile = streamingManager.residentTile(id);
-                if (tile == nullptr)
-                {
-                    continue;
-                }
-
-                std::vector<float> geometricErrors;
-                geometricErrors.reserve(tile->lods().size());
-                for (const TileLOD& lod : tile->lods())
-                {
-                    geometricErrors.push_back(lod.geometricError);
-                }
-
-                const std::uint32_t rawLod = lodManager.selectLOD(id, tile->bounds().center(), geometricErrors, cameraParams);
-                const std::size_t lodIndex = std::min<std::size_t>(rawLod, gpu.lodMeshes.size() - 1);
-
-                const std::vector<Mesh>& meshes = tile->lods()[lodIndex].meshes;
-                for (std::size_t meshIndex = 0; meshIndex < gpu.lodMeshes[lodIndex].size() && meshIndex < meshes.size(); ++meshIndex)
-                {
-                    const int materialIndex = meshes[meshIndex].materialIndex;
-                    MaterialHandle materialHandle{};
-                    if (materialIndex >= 0 && static_cast<std::size_t>(materialIndex) < gpu.materials.size())
-                    {
-                        materialHandle = gpu.materials[static_cast<std::size_t>(materialIndex)].handle();
-                    }
-                    renderer.drawMesh(gpu.lodMeshes[lodIndex][meshIndex].handle(), materialHandle, Mat4::identity());
-                }
-            }
-
-            if (showDebugBounds)
-            {
-                for (const TileId& id : tileIndex.queryRadius(cameraParams.position, options.streamingRadius))
-                {
-                    // Prefer the resident tile's own bounds: TileIndex's
-                    // bounds use the dataset manifest's generic Y range
-                    // ([-1000, 1000] — see DatasetManifest::worldBounds(),
-                    // there's no real per-dataset height field yet), which
-                    // makes every wireframe box 2000 units tall. A loaded
-                    // tile's own bounds() are tight to its actual content.
-                    std::optional<AABB> bounds;
-                    if (const Tile* resident = streamingManager.residentTile(id))
-                    {
-                        bounds = resident->bounds();
-                    }
-                    else
-                    {
-                        bounds = tileIndex.find(id);
-                    }
-
-                    if (bounds)
-                    {
-                        debugRenderer.drawTileBounds(*bounds, streamingManager.stateOf(id));
-                    }
-                }
-                debugRenderer.flush();
-            }
-
+            renderer.beginFrame(proj * view);
+            world.render(renderer, cameraParams);
             renderer.endFrame();
             renderer.present();
 
             if (now - lastStatsPrint > std::chrono::seconds(1))
             {
                 lastStatsPrint = now;
-                const StreamingStatistics stats = streamingManager.statistics();
+                const StreamingStatistics stats = world.statistics();
                 wchar_t title[256];
                 swprintf_s(
                     title,
                     L"Spatial SDK Viewer - %hs - Resident %zu | Loading %zu | Requested %zu | CPU %.1f MB | Hits %llu",
-                    manifest.name.c_str(), stats.residentCount, stats.loadingCount, stats.requestedCount,
+                    world.datasetManifest().name.c_str(), stats.residentCount, stats.loadingCount, stats.requestedCount,
                     static_cast<double>(stats.cpuMemoryUsedBytes) / (1024.0 * 1024.0),
                     static_cast<unsigned long long>(stats.totalCacheHits));
                 window.setTitle(title);
@@ -490,7 +322,7 @@ int main(int argc, char** argv)
             if (options.runSeconds > 0.0f &&
                 std::chrono::duration<float>(now - startTime).count() > options.runSeconds)
             {
-                const StreamingStatistics stats = streamingManager.statistics();
+                const StreamingStatistics stats = world.statistics();
                 std::cout << "--run-seconds elapsed; final stats: resident=" << stats.residentCount
                           << " loading=" << stats.loadingCount << " requested=" << stats.requestedCount
                           << " totalLoadsCompleted=" << stats.totalLoadsCompleted
@@ -499,6 +331,8 @@ int main(int argc, char** argv)
                 break;
             }
         }
+        // world (and the GPU resources it holds) is destroyed here, before
+        // renderer, by declaration order — see the note above.
     }
     catch (const std::exception& ex)
     {

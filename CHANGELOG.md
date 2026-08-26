@@ -5,6 +5,41 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — post-Phase-9 polish: `SpatialWorld` API façade and fixes
+
+- `spatial::SpatialWorld` (`sdk/include/spatial/SpatialWorld.h`) — the
+  public API façade every engine integration is meant to build on:
+  `loadDataset()`/`update()`/`render()`/`shutdown()`. Consolidates the
+  `StreamingManager`+`LODManager`+`GPUUploadQueue`+`DebugRenderer`+
+  per-tile-GPU-tracking wiring that used to live directly in
+  `examples/StandaloneViewer/src/main.cpp` — that file now just calls
+  `SpatialWorld`'s four methods. Documented in `docs/sdk_api.md` (filled in
+  for the first time) and `docs/architecture.md`.
+- `DatasetManifest` gained real `worldHeightMin`/`worldHeightMax` fields
+  (optional in the JSON manifest — an older manifest without them still
+  gets the previous generic `[-1000, 1000]` range). `SpatialTileBuilder`
+  now writes the actual height range it generates. This fixes, at the
+  root, the bug the Phase 9 debug-wireframe fix had only worked around:
+  `TileIndex`'s bounds are now accurate by construction, not just a
+  per-call fallback.
+- `FlyCamera` (previously untested — the only math-heavy piece in the
+  project without coverage) now has 9 unit tests: direction vectors,
+  mouse-look sign convention and pitch clamping, movement along each local
+  axis, view-matrix correctness, and `CameraParams` conversion.
+- Two real use-after-free bugs found and fixed while building this,
+  documented in `docs/architecture.md` and `docs/sdk_api.md`: (1) GPU
+  upload callbacks capturing a reference to a tile's GPU record that could
+  be evicted before the upload completes — fixed with deferred erasure;
+  (2) `SpatialWorld` declared *before* its `IRenderer` in both `main.cpp`
+  and (independently, caught the same way — a SIGSEGV at scope exit) in
+  the new test suite, meaning the renderer could be destroyed before the
+  GPU resources pointing into it. Both are now called out inline
+  everywhere the pattern recurs, not just fixed silently.
+- A real screenshot in the README, taken by actually running the viewer
+  against a 1,024-tile generated dataset.
+- 161 automated SDK tests total (up from 143), all green, stable across
+  repeated runs, including with `SPATIAL_SDK_WARNINGS_AS_ERRORS=ON`.
+
 ### Added — Phase 9: Standalone Viewer (first complete demonstration)
 
 - `examples/StandaloneViewer` — the SDK's first end-to-end application.

@@ -86,6 +86,17 @@ namespace spatial::data::DatasetSerializer
         }
         manifest.coordinateSystem = *coordinateSystem;
 
+        // Optional: older manifests without these keep DatasetManifest's
+        // default (generic) height range.
+        if (root.contains("worldHeightMin") && root.at("worldHeightMin").is_number())
+        {
+            manifest.worldHeightMin = root.at("worldHeightMin").get<float>();
+        }
+        if (root.contains("worldHeightMax") && root.at("worldHeightMax").is_number())
+        {
+            manifest.worldHeightMax = root.at("worldHeightMax").get<float>();
+        }
+
         if (root.contains("metadata") && root.at("metadata").is_object())
         {
             for (const auto& [key, value] : root.at("metadata").items())
@@ -108,6 +119,8 @@ namespace spatial::data::DatasetSerializer
         root["tileSize"] = manifest.tileSize;
         root["worldSize"] = manifest.worldSize;
         root["maxLOD"] = manifest.maxLOD;
+        root["worldHeightMin"] = manifest.worldHeightMin;
+        root["worldHeightMax"] = manifest.worldHeightMax;
         root["coordinateSystem"] = std::string(core::toString(manifest.coordinateSystem));
 
         json metadataObject = json::object();

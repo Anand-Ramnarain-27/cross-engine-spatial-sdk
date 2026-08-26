@@ -18,21 +18,30 @@ The core SDK has no dependency on Unity or Unreal — it compiles and is fully
 testable on its own. Engine plugins are adapters that implement a single
 rendering interface (`IRenderer`) and call the public API.
 
+![StandaloneViewer streaming a 32x32-tile procedural city, debug tile-bounds overlay enabled](docs/images/standalone_viewer.png)
+
+*`StandaloneViewer` streaming a 1,024-tile procedural city in real time — 69
+tiles resident at this camera position, debug overlay (`F1`) showing
+color-coded tile bounds. Title bar shows live streaming stats.*
+
 ## Status
 
-**Phase 9 of 14 — Standalone Viewer.** The SDK now has a complete,
-runnable demonstration: core spatial math; a binary tile format with a
-JSON manifest and a `SpatialTileBuilder` CLI that generates a procedural
-city; a generic quadtree spatial index; distance/screen-space-error LOD
-selection with hysteresis; a fully multithreaded streaming manager
-(request queue, worker pool, validated resource state machine, priority,
-cancellation); a memory-budgeted tile cache with combined priority/recency
-eviction; an engine-agnostic rendering abstraction (`IRenderer`, RAII GPU
-resources, a bounded upload queue, batched debug-line rendering); and
-**`StandaloneViewer`** — a real Win32 window, a real Direct3D 11 backend,
-and all of the above wired together against a real generated dataset. 143
-automated SDK tests, all green; the viewer itself is verified by actually
-running it (see `docs/architecture.md`'s Phase 9 section). See
+**Phase 9 of 14 — Standalone Viewer, plus a `SpatialWorld` public API
+façade.** The SDK now has a complete, runnable demonstration: core spatial
+math; a binary tile format with a JSON manifest and a `SpatialTileBuilder`
+CLI that generates a procedural city; a generic quadtree spatial index;
+distance/screen-space-error LOD selection with hysteresis; a fully
+multithreaded streaming manager (request queue, worker pool, validated
+resource state machine, priority, cancellation); a memory-budgeted tile
+cache with combined priority/recency eviction; an engine-agnostic rendering
+abstraction (`IRenderer`, RAII GPU resources, a bounded upload queue,
+batched debug-line rendering); **`StandaloneViewer`** — a real Win32
+window, a real Direct3D 11 backend, and all of the above wired together
+against a real generated dataset; and **`spatial::SpatialWorld`** — the
+single façade class an engine integration owns instead of wiring five
+subsystems together itself, which is exactly what `StandaloneViewer` now
+does. 161 automated SDK tests, all green; the viewer itself is verified by
+actually running it — including the screenshot above. See
 [docs/architecture.md](docs/architecture.md) for the full design and
 phased development plan, and [CHANGELOG.md](CHANGELOG.md) for what landed
 in each phase.
@@ -51,6 +60,8 @@ tooling.
       Direct3D 11 backend
 - [x] A standalone C++ viewer (`StandaloneViewer`) — free-fly camera,
       streamed world, LOD, debug visualization, runtime stats
+- [x] A `SpatialWorld` public API façade tying the above together for
+      engine integrations to build on
 - [ ] Unity plugin, Unreal plugin, and custom-engine integration, all
       driven by the same core
 - [x] A `SpatialTileBuilder` command-line tool that converts procedural

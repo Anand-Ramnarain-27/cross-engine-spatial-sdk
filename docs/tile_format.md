@@ -14,6 +14,8 @@ rather than guessing.
     "tileSize": 100.0,
     "worldSize": 10000.0,
     "maxLOD": 4,
+    "worldHeightMin": 0.0,
+    "worldHeightMax": 60.0,
     "coordinateSystem": "LOCAL_CARTESIAN",
     "metadata": {
         "author": "SpatialTileBuilder"
@@ -26,8 +28,9 @@ rather than guessing.
 | `version` | uint | yes | Manifest format version. Currently `1`. |
 | `name` | string | yes | Dataset name. |
 | `tileSize` | number | yes | World-space footprint (X/Z) of one generated tile; see note below. |
-| `worldSize` | number | yes | Total world width/depth; world bounds are `[-worldSize/2, worldSize/2]` on X and Z (see `DatasetManifest::worldBounds()`), with a fixed generous Y range since per-dataset height bounds aren't a manifest field yet. |
+| `worldSize` | number | yes | Total world width/depth; world bounds are `[-worldSize/2, worldSize/2]` on X and Z (see `DatasetManifest::worldBounds()`). |
 | `maxLOD` | uint | yes | Highest LOD level tiles may provide (0 = coarsest only). |
+| `worldHeightMin` / `worldHeightMax` | number | no | Dataset's Y range, used as `worldBounds()`'s Y extent (e.g. `TileIndex::buildUniformGrid`'s per-tile bounds, and anything else that needs a bound on dataset content without loading a tile). Defaults to a generic `[-1000, 1000]` if omitted — a manifest written before this field existed still loads and behaves exactly as it always did. `SpatialTileBuilder` sets these to the actual ground/building height range it generates. |
 | `coordinateSystem` | string | yes | One of the values in `spatial::core::CoordinateSystem` (currently only `"LOCAL_CARTESIAN"`). |
 | `metadata` | object | no | Free-form string-to-string key/value pairs. Non-string values are silently skipped. |
 

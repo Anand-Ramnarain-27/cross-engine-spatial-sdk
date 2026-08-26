@@ -279,6 +279,8 @@ int main(int argc, char** argv)
     manifest.tileSize = options.tileSize;
     manifest.worldSize = worldSize;
     manifest.maxLOD = options.maxLOD;
+    manifest.worldHeightMin = 0.0f;
+    manifest.worldHeightMax = options.maxBuildingHeight;
     manifest.coordinateSystem = core::CoordinateSystem::LocalCartesian;
     manifest.metadata.set("generator", "SpatialTileBuilder");
     manifest.metadata.set("tileGridLevel", std::to_string(level));

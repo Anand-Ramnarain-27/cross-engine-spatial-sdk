@@ -22,16 +22,21 @@ namespace spatial::data
         float worldSize = 10000.0f;
         std::uint32_t maxLOD = 0;
 
+        // Optional in the JSON manifest; these defaults are the same generic
+        // range used before per-dataset height bounds existed, so an older
+        // manifest missing the fields behaves exactly as it did before.
+        float worldHeightMin = -1000.0f;
+        float worldHeightMax = 1000.0f;
+
         core::CoordinateSystem coordinateSystem = core::CoordinateSystem::LocalCartesian;
 
-        // Centered at the origin on X/Z; Y uses a generous fixed range since
-        // dataset height isn't yet a manifest field.
+        // Centered at the origin on X/Z.
         [[nodiscard]] core::AABB worldBounds() const noexcept
         {
             const float half = worldSize * 0.5f;
             return core::AABB{
-                core::Vec3{-half, -1000.0f, -half},
-                core::Vec3{half, 1000.0f, half},
+                core::Vec3{-half, worldHeightMin, -half},
+                core::Vec3{half, worldHeightMax, half},
             };
         }
 

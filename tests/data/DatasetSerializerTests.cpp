@@ -179,3 +179,58 @@ TEST_CASE("DatasetManifest::worldBounds is centered on the origin", "[data][seri
     CHECK(bounds.min.z == Approx(-100.0f));
     CHECK(bounds.max.z == Approx(100.0f));
 }
+
+TEST_CASE("DatasetManifest::worldBounds uses worldHeightMin/Max for its Y extent", "[data][serialization][dataset]")
+{
+    DatasetManifest manifest{};
+    manifest.worldSize = 100.0f;
+    manifest.worldHeightMin = 5.0f;
+    manifest.worldHeightMax = 42.0f;
+
+    const AABB bounds = manifest.worldBounds();
+    CHECK(bounds.min.y == Approx(5.0f));
+    CHECK(bounds.max.y == Approx(42.0f));
+}
+
+TEST_CASE("DatasetSerializer round-trips worldHeightMin/Max", "[data][serialization][dataset]")
+{
+    DatasetManifest original{};
+    original.name = "ExampleCity";
+    original.tileSize = 100.0f;
+    original.worldSize = 1000.0f;
+    original.maxLOD = 2;
+    original.worldHeightMin = 0.0f;
+    original.worldHeightMax = 60.0f;
+
+    const auto path = tempFilePath("height_bounds.world");
+    REQUIRE(DatasetSerializer::saveManifest(original, path).hasValue());
+
+    const auto result = DatasetSerializer::loadManifest(path);
+    REQUIRE(result.hasValue());
+    CHECK(result.value().worldHeightMin == Approx(0.0f));
+    CHECK(result.value().worldHeightMax == Approx(60.0f));
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("DatasetSerializer::loadManifest defaults worldHeightMin/Max when the manifest omits them", "[data][serialization][dataset]")
+{
+    // A manifest written before this field existed must still load with the
+    // same generic Y range it always had.
+    const auto path = tempFilePath("no_height_bounds.world");
+    writeRaw(path, R"({
+        "version": 1,
+        "name": "ExampleCity",
+        "tileSize": 100.0,
+        "worldSize": 10000.0,
+        "maxLOD": 4,
+        "coordinateSystem": "LOCAL_CARTESIAN"
+    })");
+
+    const auto result = DatasetSerializer::loadManifest(path);
+    REQUIRE(result.hasValue());
+    CHECK(result.value().worldHeightMin == Approx(-1000.0f));
+    CHECK(result.value().worldHeightMax == Approx(1000.0f));
+
+    std::filesystem::remove(path);
+}
