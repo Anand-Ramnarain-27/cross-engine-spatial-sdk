@@ -5,11 +5,6 @@
 
 namespace spatial::core
 {
-    // Identifies how a dataset's coordinates should be interpreted. Only one
-    // value exists today (matching the dataset manifest in docs/tile_format.md);
-    // this is deliberately an enum rather than a free-form string so future
-    // values (e.g. a georeferenced system) are a compile-time-checked addition
-    // rather than a magic string threaded through the codebase.
     enum class CoordinateSystem
     {
         LocalCartesian,

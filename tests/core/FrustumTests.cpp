@@ -11,10 +11,8 @@ using namespace spatial::core;
 
 namespace
 {
-    // Camera at the origin looking down -Z (identity view), 90-degree
-    // vertical FOV, square aspect, near=1, far=100 — chosen so the frustum's
-    // side planes are at 45 degrees and expected in/out points are easy to
-    // reason about by hand.
+    // 90-degree vertical FOV puts the side planes at 45 degrees, so
+    // in/out points at a given depth are easy to compute by hand.
     Mat4 testViewProjection()
     {
         const Mat4 view = Mat4::identity();
@@ -63,10 +61,8 @@ TEST_CASE("Frustum intersectsSphere accounts for radius", "[core][culling][frust
 
     CHECK(frustum.intersectsSphere(Sphere{Vec3{0, 0, -10}, 1.0f}));
 
-    // Center sits in the 1-unit gap between the camera and the near plane
-    // (z = -1). A radius too small to bridge that gap must not intersect...
+    // Center sits in the gap before the near plane (z = -1).
     CHECK_FALSE(frustum.intersectsSphere(Sphere{Vec3{0, 0, 0.5f}, 0.4f}));
-    // ...but a radius large enough to reach past the near plane must.
     CHECK(frustum.intersectsSphere(Sphere{Vec3{0, 0, 0.5f}, 2.0f}));
 
     CHECK_FALSE(frustum.intersectsSphere(Sphere{Vec3{0, 0, 50}, 1.0f}));

@@ -5,9 +5,6 @@
 
 namespace spatial::core
 {
-    // Bounding sphere. Cheaper than an AABB to test against a plane or
-    // another sphere (no per-axis branching), at the cost of a looser fit
-    // for non-cubic geometry.
     struct Sphere
     {
         Vec3 center{0.0f, 0.0f, 0.0f};

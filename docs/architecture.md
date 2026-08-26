@@ -142,8 +142,44 @@ tested in complete isolation from streaming or rendering.
   the dataset manifest's `"coordinateSystem"` field; modeled as an enum
   rather than a string so future systems are a compile-time-checked addition.
 
+## Data model and serialization (Phase 3)
+
+`spatial::data` (`sdk/include/spatial/data/`) is the tile/dataset model and
+its two on-disk formats — the JSON dataset manifest and the binary `.tile`
+format. Full schema in [tile_format.md](tile_format.md); summary here:
+
+- `TileId{level, x, y}` — quadtree address; parent/child addresses are
+  computed, not looked up.
+- `Tile` — id, `AABB` bounds, optional parent, child ids, a list of
+  `TileLOD`, a list of `Material`, and free-form `Metadata`. Pure data: no
+  streaming state, no GPU handles.
+- `TileLOD` — a `geometricError` plus one `Mesh` per material used at that
+  LOD (a tile is rarely one material, e.g. ground vs. buildings).
+- `TileSerializer::loadTile`/`saveTile` — binary format, `Expected<Tile>`/
+  `Expected<void>`.
+- `DatasetManifest` + `DatasetSerializer::loadManifest`/`saveManifest` — the
+  JSON manifest. `nlohmann::json` is used only inside
+  `DatasetSerializer.cpp` and linked `PRIVATE`, so it never appears in a
+  public header or a consumer's include path.
+- `spatial::Expected<T>`/`Error` (`sdk/include/spatial/Error.h`) — introduced
+  in this phase because serialization is the first place failure is a normal
+  outcome (missing file, corrupt data, version mismatch). A minimal
+  dependency-free stand-in for C++23's `std::expected`, used instead of
+  exceptions specifically because exceptions are unsuitable for crossing an
+  engine/plugin ABI boundary (see docs/sdk_api.md once Phase 9+ needs it).
+
+**`SpatialTileBuilder`** (`tools/TileBuilder/`) is the CLI that produces a
+dataset: a procedural city generator (ground + a grid of box buildings per
+tile, deterministic per `(seed, tileId)`) writes a `.world` manifest and one
+`.tile` file per grid cell. Procedural generation was chosen over a glTF/OBJ
+importer for this phase — a robust mesh importer is a large, separate effort
+disproportionate to what this SDK is actually demonstrating (streaming, not
+asset-pipeline robustness), and procedural generation directly produces the
+Phase 25 stress-test dataset for free. A glTF/OBJ import path can be added
+later as an additional input without changing the tile format.
+
 ## Status
 
-This document will be extended as each phase lands. Current state: Phase 2
-(core spatial types) complete. No tile/dataset model, spatial index,
-streaming, LOD, culling policy, or rendering logic exists yet.
+This document will be extended as each phase lands. Current state: Phase 3
+(tile format, dataset manifest, serialization, TileBuilder) complete. No
+spatial index, streaming, LOD, culling policy, or rendering logic exists yet.

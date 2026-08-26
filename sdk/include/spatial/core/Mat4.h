@@ -7,18 +7,9 @@
 
 namespace spatial::core
 {
-    // 4x4 matrix.
-    //
-    // Convention (fixed for the whole SDK — engine integration layers are
-    // responsible for converting to/from whatever convention their engine
-    // uses, since that conversion is exactly the adapter's job):
-    //   - Storage is logically row-major: m[row][col].
-    //   - Vectors are column vectors: a transform is applied as v' = M * v.
-    //   - Composition (A * B) means "apply B first, then A", matching
-    //     standard matrix algebra: v' = (A * B) * v = A * (B * v).
-    //   - Right-handed coordinate system; perspective() targets an NDC depth
-    //     range of [-1, 1] (OpenGL-style), chosen because it makes the
-    //     frustum plane extraction formulas unambiguous and easy to verify.
+    // Row-major storage (m[row][col]), column-vector convention (v' = M * v),
+    // right-handed, NDC depth range [-1, 1]. Engine integrations convert to
+    // their own convention at the IRenderer boundary.
     struct Mat4
     {
         float m[4][4] = {

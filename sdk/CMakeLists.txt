@@ -1,8 +1,21 @@
+include(FetchContent)
+
+# Used only inside DatasetSerializer.cpp; linked PRIVATE.
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+    GIT_SHALLOW TRUE
+)
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(nlohmann_json)
+
 set(SPATIAL_SDK_TARGET spatial_sdk)
 
 set(SPATIAL_SDK_PUBLIC_HEADERS
     include/spatial/Version.h
     include/spatial/Export.h
+    include/spatial/Error.h
     include/spatial/core/Vec2.h
     include/spatial/core/Vec3.h
     include/spatial/core/Vec4.h
@@ -12,23 +25,40 @@ set(SPATIAL_SDK_PUBLIC_HEADERS
     include/spatial/core/Sphere.h
     include/spatial/core/Frustum.h
     include/spatial/core/CoordinateSystem.h
+    include/spatial/data/TileId.h
+    include/spatial/data/Metadata.h
+    include/spatial/data/Material.h
+    include/spatial/data/Mesh.h
+    include/spatial/data/TileLOD.h
+    include/spatial/data/Tile.h
+    include/spatial/data/DatasetManifest.h
+    include/spatial/data/TileSerializer.h
+    include/spatial/data/DatasetSerializer.h
+)
+
+set(SPATIAL_SDK_PRIVATE_HEADERS
+    src/data/BinaryIO.h
 )
 
 set(SPATIAL_SDK_SOURCES
     src/Version.cpp
+    src/data/TileSerializer.cpp
+    src/data/DatasetSerializer.cpp
 )
 
 if(SPATIAL_SDK_BUILD_SHARED)
-    add_library(${SPATIAL_SDK_TARGET} SHARED ${SPATIAL_SDK_SOURCES} ${SPATIAL_SDK_PUBLIC_HEADERS})
+    add_library(${SPATIAL_SDK_TARGET} SHARED ${SPATIAL_SDK_SOURCES} ${SPATIAL_SDK_PUBLIC_HEADERS} ${SPATIAL_SDK_PRIVATE_HEADERS})
     target_compile_definitions(${SPATIAL_SDK_TARGET}
         PUBLIC SPATIAL_SDK_SHARED
         PRIVATE SPATIAL_SDK_EXPORTS
     )
 else()
-    add_library(${SPATIAL_SDK_TARGET} STATIC ${SPATIAL_SDK_SOURCES} ${SPATIAL_SDK_PUBLIC_HEADERS})
+    add_library(${SPATIAL_SDK_TARGET} STATIC ${SPATIAL_SDK_SOURCES} ${SPATIAL_SDK_PUBLIC_HEADERS} ${SPATIAL_SDK_PRIVATE_HEADERS})
 endif()
 
 add_library(spatial::sdk ALIAS ${SPATIAL_SDK_TARGET})
+
+target_link_libraries(${SPATIAL_SDK_TARGET} PRIVATE nlohmann_json::nlohmann_json)
 
 target_include_directories(${SPATIAL_SDK_TARGET}
     PUBLIC

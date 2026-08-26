@@ -11,12 +11,8 @@
 
 namespace spatial::core
 {
-    // Camera view frustum as six inward-facing planes. Built from a combined
-    // view-projection matrix using the standard Gribb/Hartmann extraction:
-    // each plane's coefficients are a row of the projection matrix added to
-    // or subtracted from the last row, which is possible because clip-space
-    // membership (-w <= x,y,z <= w) is linear in the rows of the combined
-    // matrix. See Mat4.h for the matrix convention this relies on.
+    // Camera view frustum as six inward-facing planes, extracted from a
+    // combined view-projection matrix via the standard Gribb/Hartmann method.
     struct Frustum
     {
         enum class PlaneIndex : std::size_t
@@ -68,10 +64,7 @@ namespace spatial::core
             return true;
         }
 
-        // Conservative test: returns false only when the box is fully
-        // outside at least one plane. A box that merely straddles a plane
-        // (partially visible) is reported as intersecting, which is the
-        // correct, safe behavior for visibility culling.
+        // Conservative: a box straddling a plane counts as visible.
         [[nodiscard]] bool intersectsAABB(const AABB& box) const noexcept
         {
             for (const Plane& plane : planes)

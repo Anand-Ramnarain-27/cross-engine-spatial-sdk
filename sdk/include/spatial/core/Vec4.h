@@ -6,9 +6,7 @@
 
 namespace spatial::core
 {
-    // 4D vector. Mainly used as the homogeneous form of Vec3 (w=1 for points,
-    // w=0 for directions) when multiplying through a Mat4, and as the raw
-    // (A, B, C, D) coefficients of a plane equation before normalization.
+    // Homogeneous vector (w=1 for points, w=0 for directions).
     struct Vec4
     {
         float x = 0.0f;

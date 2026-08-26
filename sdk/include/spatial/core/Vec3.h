@@ -4,8 +4,7 @@
 
 namespace spatial::core
 {
-    // 3D vector. The primary world-space quantity used throughout Core, Data,
-    // Streaming, and Culling.
+    // 3D vector, the primary world-space quantity used throughout the SDK.
     struct Vec3
     {
         float x = 0.0f;
@@ -25,8 +24,6 @@ namespace spatial::core
         [[nodiscard]] constexpr float lengthSquared() const noexcept { return x * x + y * y + z * z; }
         [[nodiscard]] float length() const noexcept { return std::sqrt(lengthSquared()); }
 
-        // Returns a zero vector if this vector's length is zero, rather than
-        // producing NaN, so callers don't need to special-case degenerate input.
         [[nodiscard]] Vec3 normalized() const noexcept
         {
             const float len = length();
@@ -51,7 +48,6 @@ namespace spatial::core
     [[nodiscard]] constexpr Vec3 operator/(Vec3 lhs, float s) noexcept { lhs /= s; return lhs; }
     [[nodiscard]] constexpr Vec3 operator-(const Vec3& v) noexcept { return Vec3{-v.x, -v.y, -v.z}; }
 
-    // Componentwise min/max, used by AABB construction.
     [[nodiscard]] constexpr Vec3 minComponents(const Vec3& a, const Vec3& b) noexcept
     {
         return Vec3{a.x < b.x ? a.x : b.x, a.y < b.y ? a.y : b.y, a.z < b.z ? a.z : b.z};

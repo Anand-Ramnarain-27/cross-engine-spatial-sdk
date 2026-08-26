@@ -9,8 +9,8 @@
   developed against; Visual Studio's bundled CMake/Ninja under
   `Common7\IDE\CommonExtensions\Microsoft\CMake` work fine if CMake isn't on
   your `PATH`)
-- Internet access on first configure (CMake `FetchContent` pulls Catch2 for
-  the test suite)
+- Internet access on first configure (CMake `FetchContent` pulls Catch2 and
+  nlohmann/json)
 
 ## Build
 
@@ -41,9 +41,21 @@ ctest --test-dir build -C Debug --output-on-failure
 |---|---|---|
 | `SPATIAL_SDK_BUILD_SHARED` | `OFF` | Build `spatial_sdk` as a DLL instead of a static library |
 | `SPATIAL_SDK_BUILD_TESTS` | `ON` | Build the Catch2 test suite |
-| `SPATIAL_SDK_BUILD_TOOLS` | `ON` | Build command-line tools (e.g. `SpatialTileBuilder`, once implemented) |
+| `SPATIAL_SDK_BUILD_TOOLS` | `ON` | Build command-line tools (`SpatialTileBuilder`) |
 | `SPATIAL_SDK_BUILD_EXAMPLES` | `ON` | Build example/demo applications |
 | `SPATIAL_SDK_WARNINGS_AS_ERRORS` | `OFF` | Treat compiler warnings as errors |
+
+## Generate a sample dataset
+
+`SpatialTileBuilder` writes a procedural city dataset (manifest + tiles) in
+the SDK's format — see [tile_format.md](tile_format.md) for the schema:
+
+```bash
+build/bin/Debug/SpatialTileBuilder.exe --output assets/datasets/demo --name DemoCity --grid 4 --tile-size 100 --max-lod 3
+```
+
+`--help` lists every option (grid size, building count/height range, RNG
+seed for reproducible layout, etc.).
 
 ## Project layout
 

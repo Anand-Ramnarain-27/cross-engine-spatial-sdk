@@ -19,9 +19,17 @@ set(SPATIAL_SDK_TEST_SOURCES
     core/PlaneTests.cpp
     core/FrustumTests.cpp
     core/CoordinateSystemTests.cpp
+    data/ErrorTests.cpp
+    data/TileIdTests.cpp
+    data/TileSerializerTests.cpp
+    data/DatasetSerializerTests.cpp
+    tools/ProceduralCityTests.cpp
+    ${CMAKE_SOURCE_DIR}/tools/TileBuilder/src/ProceduralCity.cpp
 )
 
 add_executable(${SPATIAL_SDK_TEST_TARGET} ${SPATIAL_SDK_TEST_SOURCES})
+
+target_include_directories(${SPATIAL_SDK_TEST_TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/tools/TileBuilder/src)
 
 target_link_libraries(${SPATIAL_SDK_TEST_TARGET}
     PRIVATE

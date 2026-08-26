@@ -5,6 +5,23 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 3: Tile Format
+
+- `spatial::Expected<T>`/`Error`/`ErrorCode` (`sdk/include/spatial/Error.h`)
+  — the SDK's exception-free error-reporting mechanism, per `docs/architecture.md`.
+- `spatial::data` model: `TileId`, `Metadata`, `Material`, `Mesh`/`Vertex`,
+  `TileLOD` (one `Mesh` per material), `Tile`, `DatasetManifest`.
+- Binary `.tile` format read/write (`TileSerializer`) and JSON dataset
+  manifest read/write (`DatasetSerializer`, using a privately-linked
+  `nlohmann::json`); full schema documented in `docs/tile_format.md`.
+- `SpatialTileBuilder` CLI tool (`tools/TileBuilder/`): generates a
+  deterministic procedural city (ground + buildings, multiple LOD levels)
+  and writes a complete dataset (manifest + tiles) in the SDK's format.
+- 28 new Catch2 test cases covering `Expected`/`Error`, `TileId`, tile
+  serialization round-trips and corruption handling (bad magic, truncation,
+  unsupported version), dataset manifest round-trips and validation, and the
+  procedural generator's determinism/LOD-thinning behavior.
+
 ### Added — Phase 2: Core Spatial Types
 
 - `spatial::core` vector types: `Vec2`, `Vec3`, `Vec4` (header-only,

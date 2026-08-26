@@ -5,9 +5,6 @@
 namespace spatial::core
 {
     // Plane in normal-distance form: normal . p + distance = 0.
-    // A point is on the "positive"/front side of the plane when
-    // signedDistance(p) > 0 — for frustum planes (see Frustum.h) the
-    // positive side is defined to be the inside of the frustum.
     struct Plane
     {
         Vec3 normal{0.0f, 1.0f, 0.0f};
@@ -27,10 +24,6 @@ namespace spatial::core
             return dot(normal, p) + distance;
         }
 
-        // Normalizes the plane equation so `normal` is unit length and
-        // `signedDistance` returns true Euclidean distance. Raw planes
-        // extracted from a matrix (see Frustum::fromViewProjection) are not
-        // normalized by construction and must go through this before use.
         [[nodiscard]] Plane normalized() const noexcept
         {
             const float len = normal.length();

@@ -4,8 +4,7 @@
 
 namespace spatial::core
 {
-    // 2D vector. Used for screen-space / UV quantities (e.g. viewport size,
-    // screen-space error) rather than world-space geometry.
+    // 2D vector, used for screen-space / UV quantities.
     struct Vec2
     {
         float x = 0.0f;
@@ -24,8 +23,6 @@ namespace spatial::core
         [[nodiscard]] constexpr float lengthSquared() const noexcept { return x * x + y * y; }
         [[nodiscard]] float length() const noexcept { return std::sqrt(lengthSquared()); }
 
-        // Returns a zero vector if this vector's length is zero, rather than
-        // producing NaN, so callers don't need to special-case degenerate input.
         [[nodiscard]] Vec2 normalized() const noexcept
         {
             const float len = length();

@@ -6,9 +6,6 @@
 
 namespace spatial::core
 {
-    // Axis-aligned bounding box. The primary bounding volume used for tile
-    // bounds and spatial index nodes; Sphere is used where a tighter,
-    // cheaper-to-test volume is worth the extra memory (see Sphere.h).
     struct AABB
     {
         Vec3 min{0.0f, 0.0f, 0.0f};
@@ -22,9 +19,7 @@ namespace spatial::core
             return AABB{center - extents, center + extents};
         }
 
-        // An AABB with no volume, positioned so that expanding it with any
-        // point immediately produces a valid, correctly-sized box. Use this
-        // as the starting accumulator when building a bounds from geometry.
+        // Starting accumulator for building bounds incrementally via expand().
         [[nodiscard]] static AABB empty() noexcept
         {
             constexpr float inf = std::numeric_limits<float>::infinity();
@@ -65,7 +60,6 @@ namespace spatial::core
             max = maxComponents(max, point);
         }
 
-        // Closest-point distance; zero if p is inside the box.
         [[nodiscard]] constexpr float distanceSquaredToPoint(const Vec3& p) const noexcept
         {
             const float dx = p.x < min.x ? (min.x - p.x) : (p.x > max.x ? (p.x - max.x) : 0.0f);
@@ -74,9 +68,7 @@ namespace spatial::core
             return dx * dx + dy * dy + dz * dz;
         }
 
-        // The corner of the box furthest along `direction` — the "n-vertex"
-        // used by the standard plane/AABB culling test (Frustum::intersectsAABB):
-        // if this vertex is on the negative side of a plane, the whole box is.
+        // Used by Frustum::intersectsAABB: the box corner furthest along `direction`.
         [[nodiscard]] constexpr Vec3 positiveVertex(const Vec3& direction) const noexcept
         {
             return Vec3{
