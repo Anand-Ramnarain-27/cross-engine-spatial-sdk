@@ -271,10 +271,34 @@ including the exact eviction formula and why it subsumes the project
 brief's separate "LRU / distance / priority / combined" strategy options
 into one tunable weight, is in [streaming.md](streaming.md).
 
+## Rendering (Phase 8)
+
+`spatial::rendering::IRenderer` is the engine-agnostic GPU boundary
+(create/destroy meshes, materials, textures; submit draws; submit batched
+debug lines) — minimal on purpose, no render passes or pipeline state.
+`GPUResource<HandleT, Destroy>` gives every resource type
+(`MeshResource`/`MaterialResource`/`TextureResource`) the same RAII
+lifetime handling from one template instead of three copies of it.
+`GPUUploadQueue` bounds how many uploads happen per call, which is what
+`ResourceState::UploadPending` needs to become a real asynchronous step
+instead of the instant pass-through it's been since Phase 6.
+`spatial::debug::DebugRenderer` batches tile-bounds wireframes
+color-coded by `ResourceState`, matching the project brief's legend
+exactly. Full design in [rendering.md](rendering.md).
+
+No real backend exists yet — everything here is verified against a
+recording `MockRenderer` test double (`tests/rendering/MockRenderer.h`),
+including an integration test that pulls a genuinely resident tile out of
+a `StreamingManager` and pushes its meshes through the upload queue.
+`StreamingManager` itself still has no dependency on `IRenderer` — Streaming
+and Rendering are deliberately independent branches under the API layer;
+wiring them together for real is Phase 9's job, once an actual window and
+GPU context exist to wire them to.
+
 ## Status
 
-This document will be extended as each phase lands. Current state: Phase 7
-(tile cache, memory/GPU budgets, eviction) complete, on top of Phases 5–6
-(LOD, streaming). Verified end-to-end against real generated `.tile` files
-on disk, not just in-memory fakes. No rendering, debug visualization, or
-engine integration exists yet.
+This document will be extended as each phase lands. Current state: Phase 8
+(rendering abstraction, RAII GPU resources, upload queue, debug rendering)
+complete, on top of Phases 4–7 (spatial index, LOD, streaming, cache). 143
+automated tests. No real rendering backend, standalone viewer, or engine
+integration exists yet.

@@ -50,6 +50,13 @@ set(SPATIAL_SDK_PUBLIC_HEADERS
     include/spatial/streaming/MemoryBudget.h
     include/spatial/streaming/TileCache.h
     include/spatial/streaming/StreamingManager.h
+    include/spatial/rendering/ResourceHandle.h
+    include/spatial/rendering/Color.h
+    include/spatial/rendering/DebugVertex.h
+    include/spatial/rendering/IRenderer.h
+    include/spatial/rendering/GPUResource.h
+    include/spatial/rendering/GPUUploadQueue.h
+    include/spatial/debug/DebugRenderer.h
 )
 
 set(SPATIAL_SDK_PRIVATE_HEADERS
@@ -65,6 +72,8 @@ set(SPATIAL_SDK_SOURCES
     src/streaming/WorkerPool.cpp
     src/streaming/TileCache.cpp
     src/streaming/StreamingManager.cpp
+    src/rendering/GPUUploadQueue.cpp
+    src/debug/DebugRenderer.cpp
 )
 
 if(SPATIAL_SDK_BUILD_SHARED)

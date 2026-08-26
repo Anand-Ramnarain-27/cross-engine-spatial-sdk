@@ -36,13 +36,22 @@ set(SPATIAL_SDK_TEST_SOURCES
     streaming/TileCacheTests.cpp
     streaming/StreamingManagerTests.cpp
     streaming/StreamingIntegrationTests.cpp
+    rendering/ResourceHandleTests.cpp
+    rendering/GPUResourceTests.cpp
+    rendering/GPUUploadQueueTests.cpp
+    rendering/StreamingRenderingIntegrationTests.cpp
+    debug/DebugRendererTests.cpp
     tools/ProceduralCityTests.cpp
     ${CMAKE_SOURCE_DIR}/tools/TileBuilder/src/ProceduralCity.cpp
 )
 
 add_executable(${SPATIAL_SDK_TEST_TARGET} ${SPATIAL_SDK_TEST_SOURCES})
 
-target_include_directories(${SPATIAL_SDK_TEST_TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/tools/TileBuilder/src)
+target_include_directories(${SPATIAL_SDK_TEST_TARGET}
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/tools/TileBuilder/src
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
 
 target_link_libraries(${SPATIAL_SDK_TEST_TARGET}
     PRIVATE

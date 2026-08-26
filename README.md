@@ -20,23 +20,35 @@ rendering interface (`IRenderer`) and call the public API.
 
 ## Status
 
-**Phase 1 — Project Foundation.** CMake project, SDK library skeleton,
-Catch2 test suite, and CI are in place. No spatial, streaming, or rendering
-logic exists yet; see [docs/architecture.md](docs/architecture.md) for the
-target design and the phased development plan.
+**Phase 8 of 14 — Rendering.** Through Phase 8, the SDK has: core spatial
+math and bounding volumes; a binary tile format with a JSON dataset
+manifest and a `SpatialTileBuilder` CLI that generates a procedural city;
+a generic quadtree spatial index; distance/screen-space-error LOD selection
+with hysteresis; a fully multithreaded streaming manager (request queue,
+worker pool, validated resource state machine, priority, cancellation);
+a memory-budgeted tile cache with combined priority/recency eviction; and
+an engine-agnostic rendering abstraction (`IRenderer`, RAII GPU resources,
+a bounded upload queue, batched debug-line rendering) — verified against a
+mock renderer, no real GPU backend yet. 143 automated tests, all green.
+See [docs/architecture.md](docs/architecture.md) for the full design and
+phased development plan, and [CHANGELOG.md](CHANGELOG.md) for what landed
+in each phase.
+
+Not yet built: a real rendering backend, the standalone viewer, engine
+integrations (Unity/Unreal/custom engine), and profiling tooling.
 
 ## Planned capabilities
 
-- Spatial tile hierarchy (quadtree) with efficient frustum/distance queries
-- Distance-based, then screen-space-error-based, level of detail
-- Asynchronous, priority-driven tile streaming with a documented per-tile
-  state machine and cancellation
-- CPU/GPU memory budgets with LRU/priority-based eviction and a tile cache
-- An engine-agnostic rendering abstraction (`IRenderer`)
-- A standalone C++ viewer, Unity plugin, Unreal plugin, and custom-engine
-  integration, all driven by the same core
-- A `SpatialTileBuilder` command-line tool that converts glTF/OBJ/procedural
-  geometry into the SDK's dataset + tile format
+- [x] Spatial tile hierarchy (quadtree) with efficient frustum/distance queries
+- [x] Distance-based, then screen-space-error-based, level of detail
+- [x] Asynchronous, priority-driven tile streaming with a documented per-tile
+      state machine and cancellation
+- [x] CPU/GPU memory budgets with combined priority/recency eviction and a tile cache
+- [x] An engine-agnostic rendering abstraction (`IRenderer`)
+- [ ] A standalone C++ viewer, Unity plugin, Unreal plugin, and custom-engine
+      integration, all driven by the same core
+- [x] A `SpatialTileBuilder` command-line tool that converts procedural
+      geometry into the SDK's dataset + tile format (glTF/OBJ import planned)
 
 ## Building
 
@@ -53,9 +65,10 @@ ctest --test-dir build -C Debug --output-on-failure
 - [Architecture](docs/architecture.md)
 - [Getting started](docs/getting_started.md)
 - [Public SDK API](docs/sdk_api.md)
-- [Streaming](docs/streaming.md)
-- [Level of detail](docs/lod.md)
 - [Tile format](docs/tile_format.md)
+- [Level of detail](docs/lod.md)
+- [Streaming](docs/streaming.md)
+- [Rendering](docs/rendering.md)
 - [Unity integration](docs/unity_integration.md)
 - [Unreal integration](docs/unreal_integration.md)
 - [Custom engine integration](docs/custom_engine_integration.md)

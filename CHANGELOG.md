@@ -5,6 +5,33 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 8: Rendering
+
+- `spatial::rendering::IRenderer` — the engine-agnostic GPU abstraction
+  (create/destroy mesh/material/texture, submit draws, submit batched debug
+  lines). No concrete backend yet; that's Phase 9.
+- `Handle<Tag>` (`ResourceHandle.h`) — phantom-typed opaque handles
+  (`MeshHandle`, `TextureHandle`, `MaterialHandle`).
+- `GPUResource<HandleT, Destroy>` (`GPUResource.h`) — one RAII
+  implementation, via a non-type template parameter for the destroy member
+  function, backing all three `*Resource` aliases instead of three
+  hand-written copies.
+- `GPUUploadQueue` — bounds GPU uploads processed per call; this is what
+  makes `ResourceState::UploadPending` a real step Phase 9 can make
+  asynchronous, rather than the instant StreamingManager-internal
+  pass-through it's been since Phase 6.
+- `spatial::debug::DebugRenderer` and `colorForState()` — batches tile
+  bounding-box wireframes into one `drawDebugLines` call per flush,
+  color-coded exactly per the project brief's legend (green/yellow/red/gray).
+- `MockRenderer` (`tests/rendering/MockRenderer.h`) — a recording `IRenderer`
+  test double used across the rendering and debug test suites.
+- 23 new Catch2 test cases, including an end-to-end test that pulls a
+  genuinely resident tile out of a real `StreamingManager` and uploads its
+  meshes through `GPUUploadQueue` — proving Streaming and Rendering compose
+  correctly despite neither depending on the other.
+- Full design write-up, including why `StreamingManager` deliberately does
+  *not* depend on `IRenderer` yet, in `docs/rendering.md` (new).
+
 ### Added — Phase 7: Cache and Memory Budget
 
 - `spatial::data::estimateTileMemoryBytes` (`TileMemory.h`) — deliberately
