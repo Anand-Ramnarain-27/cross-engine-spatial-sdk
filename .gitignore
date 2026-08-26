@@ -40,6 +40,10 @@ examples/UnrealDemo/Intermediate/
 examples/UnrealDemo/DerivedDataCache/
 examples/UnrealDemo/Saved/
 
+# Generated datasets (reproducible via SpatialTileBuilder; see docs/getting_started.md)
+assets/datasets/*/
+!assets/datasets/README.md
+
 # OS
 Thumbs.db
 .DS_Store

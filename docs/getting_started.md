@@ -57,6 +57,23 @@ build/bin/Debug/SpatialTileBuilder.exe --output assets/datasets/demo --name Demo
 `--help` lists every option (grid size, building count/height range, RNG
 seed for reproducible layout, etc.).
 
+## Run the standalone viewer
+
+`StandaloneViewer` needs a dataset generated above, and must be able to
+find `assets/shaders/` (its HLSL is compiled at runtime) — run it from the
+repository root, or pass `--assets <dir>`:
+
+```bash
+build/bin/Debug/StandaloneViewer.exe --dataset assets/datasets/demo/DemoCity.world
+```
+
+Controls: `WASD` to move, `Space`/`Ctrl` for up/down, hold the right mouse
+button to look around, `F1` toggles the debug tile-bounds overlay, `Esc`
+quits. `--help` lists every option, including `--run-seconds N` (auto-exit
+after N seconds — used for automated smoke testing, not needed for normal
+use). See [rendering.md](rendering.md) for how the viewer's Direct3D 11
+backend fits into the SDK's rendering abstraction.
+
 ## Project layout
 
 See [architecture.md](architecture.md) for the module layering. In short:

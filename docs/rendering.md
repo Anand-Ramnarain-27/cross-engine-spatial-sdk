@@ -106,14 +106,38 @@ tiles should not cost thousands of draw calls.
 the one module that's explicitly allowed to reach across, since a debug
 overlay's entire job is to visualize what other modules are doing.
 
-## Known simplifications (Phase 8 scope)
+## The first real backend (Phase 9)
 
-- No real backend yet. `IRenderer` is fully specified and tested, but the
-  only implementation that exists is `MockRenderer` in `tests/rendering/` —
-  a recording test double, not something a real application could render
-  with. Phase 9 builds the first real one.
+`examples/StandaloneViewer/src/D3D11Renderer` is the first concrete
+`IRenderer` — Direct3D 11, immediate context, shaders compiled from
+`assets/shaders/*.hlsl` at startup via `D3DCompile`. It's the proof that
+the abstraction in this document is actually sufficient to render with, not
+just to unit test against `MockRenderer`.
+
+One correctness detail worth calling out: HLSL's default constant-buffer
+matrix packing (column-major) doesn't match `Mat4`'s row-major/column-vector
+convention (see `docs/architecture.md`). Both shaders declare their matrix
+as `row_major` and use `mul(matrix, vector)` (not `mul(vector, matrix)`) so
+the raw `Mat4` byte layout can be memcpy'd into the constant buffer with no
+transpose step and no silent mismatch. Getting this wrong doesn't error —
+it just silently transposes every transform, so it's documented here and in
+both `.hlsl` files rather than left to be rediscovered by trial and error.
+
+The renderer uses `D3D11_CULL_NONE` (draws both triangle winding
+directions) rather than back-face culling. Procedurally generated geometry
+and future glTF/OBJ import aren't guaranteed to agree on winding order, and
+a culling mismatch doesn't error either — it just makes geometry silently
+vanish. Correctness over the minor overdraw cost at this project's scale.
+
+See `docs/getting_started.md` for how to run the viewer this backend is
+part of.
+
+## Known simplifications
+
 - No frustum-drawing debug primitive (`drawFrustum`) yet — reconstructing a
   frustum's corner points from its six planes needs plane-triple
   intersection, or storing/deriving an inverse view-projection matrix
-  (`Mat4` has no `inverse()` yet). Deferred until Phase 9 has an actual
-  camera to source the corners from directly.
+  (`Mat4` has no `inverse()` yet).
+- `createTexture` exists on `IRenderer` and is implemented by
+  `D3D11Renderer`, but nothing calls it yet — `Material` still carries no
+  texture references (see `docs/tile_format.md`).
