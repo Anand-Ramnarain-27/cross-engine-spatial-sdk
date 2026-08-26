@@ -115,8 +115,35 @@ Resident`) are rejected. This is documented in detail in
   concerns (a D3D/Vulkan/GL context usually can't be touched from a worker
   thread) out of the streaming logic entirely.
 
+## Core math conventions (Phase 2)
+
+`spatial::core` (`sdk/include/spatial/core/`) implements the SDK's vector,
+matrix, and bounding-volume types. These are pure, header-only, and have no
+dependency on anything outside `<cmath>`/`<array>`/etc., so they can be unit
+tested in complete isolation from streaming or rendering.
+
+- `Vec2`, `Vec3`, `Vec4` — value types, no dynamic allocation.
+- `Mat4` — logically row-major storage (`m[row][col]`), **column-vector**
+  convention (`v' = M * v`), right-handed, perspective projection targets an
+  OpenGL-style NDC depth range of `[-1, 1]`. This is an internal SDK
+  convention, not any particular engine's — Unity/Unreal/custom-engine
+  integration layers convert to/from their own matrix conventions at the
+  `IRenderer`/`Camera` boundary, which is exactly where that conversion
+  belongs.
+- `Plane` — normal-distance form (`normal . p + distance = 0`); "positive
+  side" is caller-defined (for `Frustum`, positive = inside).
+- `AABB`, `Sphere` — the two bounding volumes used everywhere else in the
+  SDK (tile bounds, spatial index nodes, culling tests).
+- `Frustum` — six inward-facing planes extracted from a combined
+  view-projection matrix via the standard Gribb/Hartmann method;
+  `intersectsAABB`/`intersectsSphere` are conservative (a straddling volume
+  counts as visible), which is the correct behavior for culling.
+- `CoordinateSystem` — currently a single value (`LocalCartesian`), matching
+  the dataset manifest's `"coordinateSystem"` field; modeled as an enum
+  rather than a string so future systems are a compile-time-checked addition.
+
 ## Status
 
-This document will be extended as each phase lands. Current state: Phase 1
-(project foundation) only — no spatial, streaming, or rendering logic exists
-yet.
+This document will be extended as each phase lands. Current state: Phase 2
+(core spatial types) complete. No tile/dataset model, spatial index,
+streaming, LOD, culling policy, or rendering logic exists yet.

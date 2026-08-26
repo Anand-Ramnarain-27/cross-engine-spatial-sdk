@@ -3,6 +3,15 @@ set(SPATIAL_SDK_TARGET spatial_sdk)
 set(SPATIAL_SDK_PUBLIC_HEADERS
     include/spatial/Version.h
     include/spatial/Export.h
+    include/spatial/core/Vec2.h
+    include/spatial/core/Vec3.h
+    include/spatial/core/Vec4.h
+    include/spatial/core/Mat4.h
+    include/spatial/core/Plane.h
+    include/spatial/core/AABB.h
+    include/spatial/core/Sphere.h
+    include/spatial/core/Frustum.h
+    include/spatial/core/CoordinateSystem.h
 )
 
 set(SPATIAL_SDK_SOURCES

@@ -12,6 +12,13 @@ set(SPATIAL_SDK_TEST_TARGET spatial_sdk_tests)
 
 set(SPATIAL_SDK_TEST_SOURCES
     core/VersionTests.cpp
+    core/VectorTests.cpp
+    core/Mat4Tests.cpp
+    core/AABBTests.cpp
+    core/SphereTests.cpp
+    core/PlaneTests.cpp
+    core/FrustumTests.cpp
+    core/CoordinateSystemTests.cpp
 )
 
 add_executable(${SPATIAL_SDK_TEST_TARGET} ${SPATIAL_SDK_TEST_SOURCES})
