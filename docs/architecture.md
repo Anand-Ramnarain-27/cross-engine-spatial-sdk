@@ -221,8 +221,48 @@ query's search volume is fixed and small by construction, so it prunes far
 more of the tree. Numbers are from one local run for illustration, not a
 tracked regression benchmark.
 
+## LOD (Phase 5)
+
+`spatial::lod` selects a per-tile LOD index from camera distance, with
+hysteresis to avoid flicker at a boundary. Full writeup in
+[lod.md](lod.md); the short version: distance-threshold and screen-space-
+error selection turn out to be the same algorithm (SSE mode converts its
+error budget into equivalent distance thresholds), so there's one
+hysteresis implementation, not two. `LODManager<Key>` is templated on an
+opaque key for the same reason `SpatialIndex<T>` is generic — Core (and
+`spatial::lod`, which only depends on Core) doesn't depend on the tile
+model. LOD never triggers a tile load: the binary tile format bundles every
+LOD into one file, so LOD is purely a render-time decision over
+already-resident data, independent of and testable apart from streaming.
+
+## Streaming (Phase 6 — core milestone)
+
+`spatial::streaming::StreamingManager` is the orchestrator described in the
+project brief: given a camera, it determines desired tiles
+(`TileIndex::queryRadius`), diffs against what's tracked, issues/cancels
+requests, and drives each tile through the resource state machine
+(`ResourceState.h`) — asserted valid on every transition, never silently
+skipped. `RequestQueue` is a thread-safe priority queue (lazy-deletion
+cancellation); `WorkerPool` owns a fixed thread pool that pulls from it and
+runs an injected `TileLoader`, reporting results back through a
+mutex-guarded queue `update()` drains on the main thread. Full design,
+including the priority formula and how cancellation is scoped to "never
+start wasted work, but let in-flight work finish and discard it," is in
+[streaming.md](streaming.md).
+
+Verified with a real end-to-end test
+(`tests/streaming/StreamingIntegrationTests.cpp`): generates actual `.tile`
+files via `SpatialTileBuilder`'s generator, builds a real `TileIndex` from
+a manifest, and streams the real files from disk through `StreamingManager`
+— not just against in-memory fakes.
+
+Memory/GPU budgets and eviction (LRU or otherwise) are explicitly out of
+scope here; a tile leaving the streaming radius unloads immediately. Phase
+7 adds a cache with a retention policy on top of this baseline.
+
 ## Status
 
-This document will be extended as each phase lands. Current state: Phase 4
-(spatial index, tile lookup, frustum/distance queries) complete. No
-streaming, LOD selection, culling policy, or rendering logic exists yet.
+This document will be extended as each phase lands. Current state: Phase 6
+(streaming manager, request queue, worker pool, state machine, cancellation,
+priority) complete, on top of Phase 5 (LOD). No memory/GPU budget, cache
+eviction, or rendering logic exists yet.

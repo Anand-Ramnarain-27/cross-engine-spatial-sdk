@@ -5,6 +5,50 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 6: Streaming (core milestone)
+
+- `spatial::streaming::ResourceState` — the full tile resource lifecycle
+  (`Unloaded` through `Resident` and back) with `isValidTransition`,
+  asserted on every transition by `StreamingManager`.
+- `RequestQueue` — thread-safe priority queue with lazy-deletion
+  cancellation and push-time deduplication.
+- `WorkerPool` — a fixed-size thread pool pulling from a `RequestQueue`,
+  running an injected `TileLoader`, and reporting results/in-flight status
+  back through mutex-guarded state the main thread polls each frame.
+- `StreamingManager` — determines desired tiles from `TileIndex::queryRadius`,
+  issues distance/direction-weighted prioritized requests (throttled per
+  `update()` call), cancels requests that haven't started, discards results
+  for in-flight loads that are no longer wanted, and unloads resident tiles
+  that fall outside the streaming radius. `makeFileTileLoader()` builds the
+  standard disk-backed loader.
+- 34 new Catch2 test cases: exhaustive state-machine transition coverage,
+  `RequestQueue` concurrency/dedup/cancellation (including a 4-producer/
+  3-consumer stress test), `WorkerPool` dispatch and in-flight tracking
+  (synchronized via `std::promise`, not sleeps), and `StreamingManager`
+  integration tests covering priority ordering, both cancellation paths,
+  failure handling, and request throttling — driven by a
+  `ControllableLoader` test double for deterministic async timing.
+- A real end-to-end test (`StreamingIntegrationTests.cpp`) that generates
+  actual `.tile` files, builds a real `TileIndex`, and streams them from
+  disk — not just in-memory fakes.
+- Full design write-up in `docs/streaming.md`.
+
+### Added — Phase 5: LOD
+
+- `spatial::lod::selectLODByDistance` and `computeScreenSpaceError`/
+  `screenSpaceErrorCrossoverDistance` — the latter lets screen-space-error
+  LOD selection reuse the exact same distance-threshold algorithm as
+  distance-mode selection (see `docs/lod.md` for why).
+- `LODManager<Key>` — stateful, hysteresis-aware LOD selection keyed by an
+  opaque hashable key (`TileId` in practice), templated so `spatial::lod`
+  stays dependency-free of the tile model, matching the pattern already
+  used for `SpatialIndex<T>`.
+- `core::CameraParams` — the minimal per-frame camera snapshot shared by
+  LOD selection and (Phase 6) streaming.
+- 16 new Catch2 test cases covering both LOD metrics and hysteresis
+  behavior (holding steady near a boundary, releasing past it, snapping on
+  a large jump, per-key independence).
+
 ### Added — Phase 4: Spatial Hierarchy
 
 - `spatial::core::SpatialIndex<T>` (`sdk/include/spatial/core/SpatialIndex.h`)

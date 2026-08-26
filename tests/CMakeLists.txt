@@ -26,6 +26,14 @@ set(SPATIAL_SDK_TEST_SOURCES
     data/TileSerializerTests.cpp
     data/DatasetSerializerTests.cpp
     data/TileIndexTests.cpp
+    lod/ScreenSpaceErrorTests.cpp
+    lod/DistanceLODTests.cpp
+    lod/LODManagerTests.cpp
+    streaming/ResourceStateTests.cpp
+    streaming/RequestQueueTests.cpp
+    streaming/WorkerPoolTests.cpp
+    streaming/StreamingManagerTests.cpp
+    streaming/StreamingIntegrationTests.cpp
     tools/ProceduralCityTests.cpp
     ${CMAKE_SOURCE_DIR}/tools/TileBuilder/src/ProceduralCity.cpp
 )

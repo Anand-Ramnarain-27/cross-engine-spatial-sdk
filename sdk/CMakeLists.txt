@@ -1,5 +1,7 @@
 include(FetchContent)
 
+find_package(Threads REQUIRED)
+
 # Used only inside DatasetSerializer.cpp; linked PRIVATE.
 FetchContent_Declare(
     nlohmann_json
@@ -26,6 +28,10 @@ set(SPATIAL_SDK_PUBLIC_HEADERS
     include/spatial/core/Frustum.h
     include/spatial/core/CoordinateSystem.h
     include/spatial/core/SpatialIndex.h
+    include/spatial/core/CameraParams.h
+    include/spatial/lod/DistanceLOD.h
+    include/spatial/lod/ScreenSpaceError.h
+    include/spatial/lod/LODManager.h
     include/spatial/data/TileId.h
     include/spatial/data/Metadata.h
     include/spatial/data/Material.h
@@ -36,6 +42,11 @@ set(SPATIAL_SDK_PUBLIC_HEADERS
     include/spatial/data/TileSerializer.h
     include/spatial/data/DatasetSerializer.h
     include/spatial/data/TileIndex.h
+    include/spatial/streaming/ResourceState.h
+    include/spatial/streaming/TileRequest.h
+    include/spatial/streaming/RequestQueue.h
+    include/spatial/streaming/WorkerPool.h
+    include/spatial/streaming/StreamingManager.h
 )
 
 set(SPATIAL_SDK_PRIVATE_HEADERS
@@ -47,6 +58,9 @@ set(SPATIAL_SDK_SOURCES
     src/data/TileSerializer.cpp
     src/data/DatasetSerializer.cpp
     src/data/TileIndex.cpp
+    src/streaming/RequestQueue.cpp
+    src/streaming/WorkerPool.cpp
+    src/streaming/StreamingManager.cpp
 )
 
 if(SPATIAL_SDK_BUILD_SHARED)
@@ -61,7 +75,10 @@ endif()
 
 add_library(spatial::sdk ALIAS ${SPATIAL_SDK_TARGET})
 
-target_link_libraries(${SPATIAL_SDK_TARGET} PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(${SPATIAL_SDK_TARGET}
+    PRIVATE nlohmann_json::nlohmann_json
+    PUBLIC Threads::Threads
+)
 
 target_include_directories(${SPATIAL_SDK_TARGET}
     PUBLIC
