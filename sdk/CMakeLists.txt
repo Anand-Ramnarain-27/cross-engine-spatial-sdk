@@ -25,6 +25,7 @@ set(SPATIAL_SDK_PUBLIC_HEADERS
     include/spatial/core/Sphere.h
     include/spatial/core/Frustum.h
     include/spatial/core/CoordinateSystem.h
+    include/spatial/core/SpatialIndex.h
     include/spatial/data/TileId.h
     include/spatial/data/Metadata.h
     include/spatial/data/Material.h
@@ -34,6 +35,7 @@ set(SPATIAL_SDK_PUBLIC_HEADERS
     include/spatial/data/DatasetManifest.h
     include/spatial/data/TileSerializer.h
     include/spatial/data/DatasetSerializer.h
+    include/spatial/data/TileIndex.h
 )
 
 set(SPATIAL_SDK_PRIVATE_HEADERS
@@ -44,6 +46,7 @@ set(SPATIAL_SDK_SOURCES
     src/Version.cpp
     src/data/TileSerializer.cpp
     src/data/DatasetSerializer.cpp
+    src/data/TileIndex.cpp
 )
 
 if(SPATIAL_SDK_BUILD_SHARED)

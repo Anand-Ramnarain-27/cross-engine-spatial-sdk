@@ -178,8 +178,51 @@ asset-pipeline robustness), and procedural generation directly produces the
 Phase 25 stress-test dataset for free. A glTF/OBJ import path can be added
 later as an additional input without changing the tile format.
 
+## Spatial hierarchy (Phase 4)
+
+`core::SpatialIndex<T>` (`sdk/include/spatial/core/SpatialIndex.h`) is a
+generic quadtree over axis-aligned bounds — it stores `{T, AABB}` pairs and
+has no knowledge of tiles, keeping `spatial::core` dependency-free per the
+layering rule above. It splits X/Z only (a true "quad" tree); an item is
+stored at the smallest node whose region fully contains its bounds, which is
+what makes pruning by node region correct during a query. Supports
+`queryFrustum`, `queryRadius`, and `queryAABB`.
+
+`data::TileIndex` (`sdk/include/spatial/data/TileIndex.h`) is the
+tile-specific façade: a `SpatialIndex<TileId>` plus an `unordered_map` for
+O(1) lookup by id. It indexes tile *existence and bounds*, not content —
+`TileIndex::buildUniformGrid` computes every tile's bounds directly from the
+dataset manifest's `tileSize`/`worldSize` (the same arithmetic
+`SpatialTileBuilder` uses to lay out the grid), so building the index never
+reads a `.tile` file. This is deliberate: figuring out which tiles are
+spatially relevant has to be cheap and instant, independent of how expensive
+loading their content is — that separation is exactly what makes streaming
+possible later.
+
+Note `TileId.level` (quadtree address depth, used for tile file naming) and
+a tile's LOD count (`Tile::lods()`, geometric detail) are different axes.
+`SpatialTileBuilder` currently only populates one `TileId.level`; deeper/
+shallower levels are addressable but unused until a future phase needs a
+multi-resolution tile hierarchy.
+
+**Benchmarks** (`tests/core/SpatialIndexBenchmark.cpp`, Catch2 `BENCHMARK`,
+excluded from the default `ctest` run via the hidden `[.]` tag — run with
+`spatial_sdk_tests.exe "[spatialindex][benchmark]"`), 10,000 items scattered
+across a 40,000 x 40,000 unit world, Debug build:
+
+| Query | Brute force (mean) | `SpatialIndex` (mean) | Speedup |
+|---|---|---|---|
+| Frustum (camera sees a local neighborhood) | 456.6 us | 15.7 us | ~29x |
+| Radius (200 units) | 456.1 us | 1.9 us | ~246x |
+
+The frustum speedup is far smaller than the radius speedup because the test
+camera's far plane still covers a meaningful fraction of the world; a radius
+query's search volume is fixed and small by construction, so it prunes far
+more of the tree. Numbers are from one local run for illustration, not a
+tracked regression benchmark.
+
 ## Status
 
-This document will be extended as each phase lands. Current state: Phase 3
-(tile format, dataset manifest, serialization, TileBuilder) complete. No
-spatial index, streaming, LOD, culling policy, or rendering logic exists yet.
+This document will be extended as each phase lands. Current state: Phase 4
+(spatial index, tile lookup, frustum/distance queries) complete. No
+streaming, LOD selection, culling policy, or rendering logic exists yet.

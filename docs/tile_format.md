@@ -25,7 +25,7 @@ rather than guessing.
 |---|---|---|---|
 | `version` | uint | yes | Manifest format version. Currently `1`. |
 | `name` | string | yes | Dataset name. |
-| `tileSize` | number | yes | World-space size (X/Z) of a level-0... see note below | 
+| `tileSize` | number | yes | World-space footprint (X/Z) of one generated tile; see note below. |
 | `worldSize` | number | yes | Total world width/depth; world bounds are `[-worldSize/2, worldSize/2]` on X and Z (see `DatasetManifest::worldBounds()`), with a fixed generous Y range since per-dataset height bounds aren't a manifest field yet. |
 | `maxLOD` | uint | yes | Highest LOD level tiles may provide (0 = coarsest only). |
 | `coordinateSystem` | string | yes | One of the values in `spatial::core::CoordinateSystem` (currently only `"LOCAL_CARTESIAN"`). |
@@ -40,8 +40,11 @@ Loading fails with:
 - `UnsupportedVersion` — `version` is `0` or greater than the version this
   SDK build understands (`spatial::data::kDatasetManifestVersion`).
 
-`tileSize` note: it names the level-0 tile's world-space footprint; deeper
-levels are progressively smaller as the quadtree subdivides (see below).
+`tileSize` note: `gridSize = worldSize / tileSize` must be a power of two;
+`SpatialTileBuilder` generates one flat grid of `gridSize x gridSize` tiles
+at `TileId.level = log2(gridSize)`. Each of those tiles independently has
+`maxLOD + 1` levels of detail (`TileLOD`, see below) — LOD is a per-tile
+geometric-detail axis, unrelated to `TileId.level`.
 
 ## Tile hierarchy addressing
 
@@ -51,7 +54,8 @@ dataset; at level `L` there are up to `2^L x 2^L` tiles, each one quarter
 the area of its parent. A tile's four children are always
 `(level+1, 2x, 2y)`, `(2x+1, 2y)`, `(2x, 2y+1)`, `(2x+1, 2y+1)` — so parent
 and child addresses are computed (`TileId::parent()`/`TileId::child()`), not
-looked up.
+looked up. `SpatialTileBuilder` currently only populates one level; shallower
+or deeper levels are addressable but not yet generated.
 
 On disk, a tile's file is named `L{level}_{x}_{y}.tile`, e.g. `L1_0_1.tile`.
 

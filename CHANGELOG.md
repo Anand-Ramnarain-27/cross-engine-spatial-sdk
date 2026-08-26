@@ -5,6 +5,29 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 4: Spatial Hierarchy
+
+- `spatial::core::SpatialIndex<T>` (`sdk/include/spatial/core/SpatialIndex.h`)
+  — a generic quadtree over axis-aligned bounds (X/Z split), with
+  `queryFrustum`, `queryRadius`, and `queryAABB`. Zero dependency on the
+  tile/dataset model, per the Core layering rule.
+- `spatial::data::TileIndex` — wraps `SpatialIndex<TileId>` plus an
+  `unordered_map` for O(1) id lookup. `TileIndex::buildUniformGrid` computes
+  every tile's bounds from the dataset manifest alone (no `.tile` files
+  read).
+- 20 new Catch2 test cases: `SpatialIndex` correctness against brute-force
+  comparison on random data (frustum + radius queries), subdivision and
+  boundary-straddling edge cases, and `TileIndex` grid construction/lookup/
+  validation.
+- `tests/core/SpatialIndexBenchmark.cpp` — Catch2 `BENCHMARK` comparing
+  brute-force vs. indexed frustum/radius queries over 10,000 items; excluded
+  from the default `ctest` run (hidden tag), run manually. Results recorded
+  in `docs/architecture.md`.
+- Corrected a `docs/tile_format.md` inaccuracy from Phase 3: `tileSize`
+  describes each generated tile's footprint, not a "level-0 root tile" —
+  `SpatialTileBuilder` generates one flat grid of tiles at a single
+  `TileId.level`, and per-tile LOD is a separate axis from quadtree depth.
+
 ### Added — Phase 3: Tile Format
 
 - `spatial::Expected<T>`/`Error`/`ErrorCode` (`sdk/include/spatial/Error.h`)

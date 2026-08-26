@@ -19,10 +19,13 @@ set(SPATIAL_SDK_TEST_SOURCES
     core/PlaneTests.cpp
     core/FrustumTests.cpp
     core/CoordinateSystemTests.cpp
+    core/SpatialIndexTests.cpp
+    core/SpatialIndexBenchmark.cpp
     data/ErrorTests.cpp
     data/TileIdTests.cpp
     data/TileSerializerTests.cpp
     data/DatasetSerializerTests.cpp
+    data/TileIndexTests.cpp
     tools/ProceduralCityTests.cpp
     ${CMAKE_SOURCE_DIR}/tools/TileBuilder/src/ProceduralCity.cpp
 )
@@ -39,4 +42,7 @@ target_link_libraries(${SPATIAL_SDK_TEST_TARGET}
 
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
-catch_discover_tests(${SPATIAL_SDK_TEST_TARGET})
+# TEST_SPEC ~[.] excludes hidden-tagged tests (e.g. the SpatialIndex
+# benchmarks) from the default ctest run; they still compile and can be run
+# manually via spatial_sdk_tests.exe "[spatialindex][benchmark]".
+catch_discover_tests(${SPATIAL_SDK_TEST_TARGET} TEST_SPEC ~[.])
