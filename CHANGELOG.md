@@ -5,6 +5,45 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 10: Unity Integration
+
+- `examples/UnityDemo/NativePlugin` — a C++ CMake target
+  (`SpatialUnityPlugin.dll`) wrapping `spatial::SpatialWorld` behind a flat
+  C ABI (`SpatialUnityPlugin.h/.cpp`), since Unity's P/Invoke marshaler can
+  only cross into C++ through free functions and fixed-layout structs, not
+  class members. `ManagedMeshRenderer` is the `IRenderer` implementation
+  behind it — a scope decision, not a shortcut: rather than a native
+  Unity graphics-API plugin (`IUnityGraphicsD3D11`/`GL.IssuePluginEvent`,
+  a genuinely separate project and pipeline-specific), it records CPU-side
+  mesh/material/draw-command data that Unity pulls once per frame and
+  turns into real `UnityEngine.Mesh` objects drawn with
+  `Graphics.DrawMesh` — see `docs/unity_integration.md` for the full
+  rationale.
+- `UnityProject/Assets/SpatialSDK/Scripts/` — `SpatialWorldNative.cs`
+  ([DllImport] bindings, kept in sync with the C header by hand),
+  `CoordinateConversion.cs` (the one place the SDK's right-handed/Unity's
+  left-handed convention is handled — Z-negation plus reversed triangle
+  winding, the same category of bug as Phase 9's HLSL row-major/`mul()`
+  mismatch), and `SpatialWorldComponent.cs` — the `MonoBehaviour` an
+  integration adds to a `GameObject`, exposing dataset path, streaming
+  config, debug/statistics toggles, and material as Inspector fields, with
+  no core SDK logic of its own.
+- A real, openable Unity project (`UnityProject/`, Unity 6000.5.9f1) with
+  a generated demo dataset and `Assets/Scenes/SpatialSDKDemo.unity`
+  (reproducible via the `Spatial SDK > Rebuild Demo Scene` Editor menu
+  command). **Verified live in the Unity Editor, not just by compiling**:
+  entered Play mode, watched the dataset stream to 16/16 tiles resident,
+  and confirmed the rendered buildings are solid and correctly shaded
+  (proving the coordinate-conversion winding fix is actually correct, not
+  mirrored/inside-out) — the same standard of verification Phase 9 set
+  for `StandaloneViewer`, applied here via the Unity Editor instead of a
+  standalone window. Zero console errors or warnings.
+- `tests/examples/SpatialUnityPluginTests.cpp` — 6 new test cases
+  exercising the actual exported `SpatialUnity_*` C functions (not just
+  the C++ classes behind them), since struct layout, caller-allocated
+  output buffers, and unknown-id handling are exactly what a C++-only test
+  would miss. 167 automated SDK tests total (up from 161).
+
 ### Added — post-Phase-9 polish: `SpatialWorld` API façade and fixes
 
 - `spatial::SpatialWorld` (`sdk/include/spatial/SpatialWorld.h`) — the

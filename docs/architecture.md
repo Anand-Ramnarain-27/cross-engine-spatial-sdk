@@ -361,13 +361,58 @@ where a fresh screenshot (in the README) confirmed identical behavior to
 before the refactor (same final stats: 54 resident tiles, 0 load failures,
 on the same test dataset).
 
+## Unity integration (Phase 10)
+
+`examples/UnityDemo` is the SDK's first engine integration, and the first
+real test of the boundary `IRenderer` was designed around: can something
+that isn't a C++ application built by this repo's own CMake consume the
+SDK at all? The answer required a native plugin, since C# cannot call C++
+member functions or see a C++ class's layout — everything crossing that
+boundary is a flat `extern "C"` function and fixed-layout structs
+(`SpatialUnityPlugin.h`, mirrored by hand in `SpatialWorldNative.cs`, kept
+in sync without codegen).
+
+The interesting design decision was how far to take the rendering side.
+`IRenderer` doesn't care what a backend does with the geometry it's
+handed — `D3D11Renderer` uploads it to a real GPU device; a native Unity
+integration would normally do the same against Unity's own device via its
+low-level rendering plugin interface (`IUnityGraphicsD3D11`,
+`GL.IssuePluginEvent`), which is real, valid, and also a meaningfully
+separate project — the interop differs by graphics API and by
+Built-in/URP/HDRP, and mistakes there tend to fail on driver-specific
+timing rather than at compile time. `ManagedMeshRenderer` — the
+`IRenderer` implementation the plugin actually ships — takes the other
+option: it never touches a graphics API. `createMesh`/`drawMesh`/
+`drawDebugLines` just record CPU-side data; Unity pulls it once per frame
+across the C API and turns it into real `UnityEngine.Mesh` objects drawn
+with `Graphics.DrawMesh`. This is a legitimate, commonly used pattern for
+streaming plugins (not unique to this project), works unmodified under
+any Unity render pipeline since it never assumes one, and — same as the
+D3D11-vs-D3D12/Vulkan choice in Phase 9 — is flagged here rather than
+presented as the only way to do it. Full writeup, including what this
+trades away, in [unity_integration.md](unity_integration.md).
+
+**A second engine-boundary convention mismatch, same shape as Phase 9's
+HLSL one.** `spatial::core::Mat4` is right-handed, Y-up; Unity is
+left-handed, Y-up. Same up axis, opposite handedness — negate Z on every
+position/direction/normal crossing the boundary, and reverse each
+triangle's winding to compensate (mirroring one axis flips front-face
+winding). Both live in exactly one place
+(`CoordinateConversion.cs`), and — learning from Phase 9's D3D11 bug,
+where a convention mismatch compiled fine and only showed up as visibly
+wrong geometry — this one was verified the same way: not just "it
+compiles," but actually entering Play mode in the Unity Editor and
+confirming the rendered buildings are solid and correctly shaded rather
+than mirrored or inside-out.
+
 ## Status
 
-This document will be extended as each phase lands. Current state: Phase 9
-(standalone viewer, D3D11 backend, `SpatialWorld` public API façade, full
-Streaming+LOD+Rendering+Debug wiring, real per-dataset height bounds)
-complete, on top of Phases 4–8. 161 automated SDK tests (the viewer itself
-is Win32/GPU-dependent and isn't part of that suite — see
-[rendering.md](rendering.md) for why platform backends are verified by
-running the app instead). No engine integration (Unity/Unreal/custom
-engine) or profiling tooling exists yet.
+This document will be extended as each phase lands. Current state: Phase
+10 (Unity native plugin + C# integration, verified live in the Unity
+Editor) complete, on top of Phase 9 (standalone viewer, D3D11 backend,
+`SpatialWorld` public API façade, full Streaming+LOD+Rendering+Debug
+wiring, real per-dataset height bounds) and Phases 4–8. 167 automated SDK
+tests (the viewer and the Unity demo are both GPU/Editor-dependent and
+aren't part of that suite — see [rendering.md](rendering.md) for why
+platform backends are verified by actually running them instead). No
+Unreal or custom-engine integration, or profiling tooling, exists yet.

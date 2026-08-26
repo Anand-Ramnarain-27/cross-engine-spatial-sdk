@@ -26,11 +26,18 @@ _deps/
 .idea/
 
 # Unity
-examples/UnityDemo/Library/
-examples/UnityDemo/Temp/
-examples/UnityDemo/Obj/
-examples/UnityDemo/Logs/
-examples/UnityDemo/UserSettings/
+examples/UnityDemo/UnityProject/Library/
+examples/UnityDemo/UnityProject/Temp/
+examples/UnityDemo/UnityProject/Obj/
+examples/UnityDemo/UnityProject/Logs/
+examples/UnityDemo/UnityProject/UserSettings/
+examples/UnityDemo/UnityProject/*.log
+# Native plugin DLL — a build artifact of examples/UnityDemo/NativePlugin,
+# copied here automatically by its CMake target; not committed, same as any
+# other build output.
+examples/UnityDemo/UnityProject/Assets/Plugins/x86_64/
+# Demo dataset — reproducible via SpatialTileBuilder; see examples/UnityDemo/README.md.
+examples/UnityDemo/UnityProject/Assets/StreamingAssets/SpatialSDK/DemoCity/
 *.csproj
 *.unityproj
 
