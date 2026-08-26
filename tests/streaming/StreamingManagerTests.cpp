@@ -128,8 +128,12 @@ TEST_CASE("StreamingManager loads tiles within radius and leaves distant tiles u
     CHECK(manager.residentTile(TileId{0, 3, 0}) == nullptr);
 }
 
-TEST_CASE("StreamingManager unloads a tile once it leaves the streaming radius", "[streaming][manager]")
+TEST_CASE("StreamingManager keeps a tile cached (not unloaded) once it leaves the streaming radius", "[streaming][manager]")
 {
+    // Phase 7: leaving the desired set no longer unloads a Resident tile
+    // immediately — it stays cached, subject only to budget-driven
+    // eviction (see TileCacheTests.cpp and the dedicated eviction test
+    // below), so a camera panning back doesn't force a reload.
     const TileIndex index = makeTestIndex();
     StreamingManager manager(index, immediateSuccessLoader(), testConfig());
 
@@ -144,7 +148,61 @@ TEST_CASE("StreamingManager unloads a tile once it leaves the streaming radius",
     farCamera.position = Vec3{50000, 0, 0};
     manager.update(farCamera);
 
-    CHECK(manager.stateOf(TileId{0, 2, 0}) == ResourceState::Unloaded);
+    CHECK(manager.stateOf(TileId{0, 2, 0}) == ResourceState::Resident);
+    CHECK(manager.statistics().totalUnloads == 0);
+}
+
+TEST_CASE("StreamingManager reuses a cached tile without reloading when it re-enters the streaming radius", "[streaming][manager]")
+{
+    const TileIndex index = makeTestIndex();
+    StreamingManager manager(index, immediateSuccessLoader(), testConfig());
+
+    CameraParams nearCamera{};
+    nearCamera.position = Vec3{0, 0, 0};
+    REQUIRE(waitUntil([&] {
+        manager.update(nearCamera);
+        return manager.stateOf(TileId{0, 2, 0}) == ResourceState::Resident;
+    }));
+
+    CameraParams farCamera{};
+    farCamera.position = Vec3{50000, 0, 0};
+    manager.update(farCamera); // falls out of the desired set, but stays cached
+
+    const std::uint64_t completedBefore = manager.statistics().totalLoadsCompleted;
+    manager.update(nearCamera); // back in range
+
+    CHECK(manager.stateOf(TileId{0, 2, 0}) == ResourceState::Resident);
+    CHECK(manager.statistics().totalCacheHits >= 1);
+    CHECK(manager.statistics().totalLoadsCompleted == completedBefore); // no reload happened
+}
+
+TEST_CASE("StreamingManager evicts stale cached tiles once the resident budget is exceeded", "[streaming][manager]")
+{
+    // Six tiles spaced far apart so a small streaming radius only ever
+    // desires one at a time; sweeping the camera across all of them
+    // accumulates cached-but-undesired tiles faster than the budget allows.
+    TileIndex index(AABB{Vec3{-10000, -1000, -1000}, Vec3{10000, 1000, 1000}});
+    for (std::uint32_t i = 0; i < 6; ++i)
+    {
+        const float x = static_cast<float>(i) * 500.0f;
+        index.insert(TileId{0, i, 0}, AABB{Vec3{x - 5, -5, -5}, Vec3{x + 5, 5, 5}});
+    }
+
+    StreamingConfig config = testConfig(100.0f, 4);
+    config.memoryBudget.maxResidentTiles = 2;
+    StreamingManager manager(index, immediateSuccessLoader(), config);
+
+    for (std::uint32_t i = 0; i < 6; ++i)
+    {
+        CameraParams camera{};
+        camera.position = Vec3{static_cast<float>(i) * 500.0f, 0, 0};
+        REQUIRE(waitUntil([&] {
+            manager.update(camera);
+            return manager.stateOf(TileId{0, i, 0}) == ResourceState::Resident;
+        }));
+    }
+
+    CHECK(manager.statistics().residentCount <= 2);
     CHECK(manager.statistics().totalUnloads >= 1);
 }
 

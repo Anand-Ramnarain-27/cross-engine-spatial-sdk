@@ -5,6 +5,32 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 7: Cache and Memory Budget
+
+- `spatial::data::estimateTileMemoryBytes` (`TileMemory.h`) — deliberately
+  inexact CPU memory estimate for a `Tile` (vertex/index buffers dominate),
+  used to enforce a budget rather than for precise accounting.
+- `spatial::streaming::TileCache` — owns CPU data for every resident tile;
+  evicts by a combined priority + recency score
+  (`keepScore = lastPriority - recencyWeight * framesSinceLastTouched`)
+  against a CPU-byte, GPU-byte (abstraction), and tile-count budget.
+  Tiles desired the current frame are never evicted.
+- `StreamingManager` now retains a tile that falls out of the streaming
+  radius (previously: immediate unload) instead of unloading it — it stays
+  Resident, cached, until `TileCache` actually evicts it under budget
+  pressure. `StreamingStatistics` gained `totalCacheHits`,
+  `cpuMemoryUsedBytes`, and `gpuMemoryUsedBytes`.
+- 18 new Catch2 test cases: `TileMemory` estimate scaling, `TileCache`
+  put/touch/find, protected-id and tile-count/byte-budget eviction,
+  combined-score ordering; plus `StreamingManager` tests for cache-hit
+  reuse (no reload when a tile re-enters the streaming radius) and
+  budget-driven eviction under a sweeping-camera scenario. One pre-existing
+  Phase 6 test (immediate-unload-on-leaving-radius) was rewritten — that
+  behavior is intentionally gone as of this phase.
+- Full design write-up (including why one formula replaces the brief's
+  separate LRU/distance/priority/combined eviction options) in
+  `docs/streaming.md`.
+
 ### Added — Phase 6: Streaming (core milestone)
 
 - `spatial::streaming::ResourceState` — the full tile resource lifecycle

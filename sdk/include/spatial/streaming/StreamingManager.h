@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -10,7 +9,9 @@
 #include "spatial/core/CameraParams.h"
 #include "spatial/data/Tile.h"
 #include "spatial/data/TileIndex.h"
+#include "spatial/streaming/MemoryBudget.h"
 #include "spatial/streaming/ResourceState.h"
+#include "spatial/streaming/TileCache.h"
 #include "spatial/streaming/WorkerPool.h"
 
 namespace spatial::streaming
@@ -27,6 +28,8 @@ namespace spatial::streaming
 
         float distancePriorityWeight = 0.7f;
         float directionPriorityWeight = 0.3f;
+
+        MemoryBudgetConfig memoryBudget;
     };
 
     struct StreamingStatistics
@@ -35,10 +38,14 @@ namespace spatial::streaming
         std::size_t loadingCount = 0;
         std::size_t residentCount = 0;
 
+        std::size_t cpuMemoryUsedBytes = 0;
+        std::size_t gpuMemoryUsedBytes = 0;
+
         std::uint64_t totalLoadsCompleted = 0;
         std::uint64_t totalLoadsFailed = 0;
         std::uint64_t totalCancellations = 0;
         std::uint64_t totalUnloads = 0;
+        std::uint64_t totalCacheHits = 0; // desired tiles that were already resident, no reload needed
     };
 
     // Builds a TileLoader that reads "<tilesDirectory>/<id>.tile" via
@@ -48,9 +55,11 @@ namespace spatial::streaming
 
     // Drives the per-tile resource lifecycle each frame: figures out which
     // tiles are desired (within streamingRadius of the camera), requests
-    // missing ones, cancels/unloads ones no longer desired, and promotes
-    // completed loads through to Resident. Main-thread only — the worker
-    // pool it owns does the actual file I/O off-thread.
+    // missing ones, cancels in-flight work no longer needed, promotes
+    // completed loads through to Resident (backed by a TileCache so a tile
+    // that falls out of view and comes back doesn't need reloading from
+    // disk), and evicts cached tiles once over budget. Main-thread only —
+    // the worker pool it owns does the actual file I/O off-thread.
     class SPATIAL_API StreamingManager
     {
     public:
@@ -73,12 +82,12 @@ namespace spatial::streaming
         struct Entry
         {
             ResourceState state = ResourceState::Unloaded;
-            std::optional<data::Tile> tile;
         };
 
         const data::TileIndex& m_tileIndex;
         StreamingConfig m_config;
         WorkerPool m_workerPool;
+        TileCache m_cache;
         std::unordered_map<data::TileId, Entry> m_entries;
         StreamingStatistics m_stats;
 

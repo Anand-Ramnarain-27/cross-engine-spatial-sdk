@@ -32,19 +32,25 @@ StreamingManager::update(camera)
   |
   +--> TileIndex::queryRadius(camera.position, streamingRadius)   -> desired set
   |
+  +--> count cache hits + touch recency for desired tiles already Resident
+  |
   +--> drain WorkerPool's completed loads
   |      - not in desired set anymore -> discard, count as a cancellation
-  |      - succeeded                  -> LoadedCPU -> UploadPending -> Resident
+  |      - succeeded                  -> LoadedCPU -> UploadPending -> Resident,
+  |                                       data handed to TileCache::put()
   |      - failed                     -> Unloaded, count as a failure
   |
   +--> promote Requested -> Loading for anything a worker has picked up
   |
-  +--> for tracked tiles no longer in the desired set:
+  +--> for Requested/Loading tiles no longer in the desired set:
   |      - Requested  -> cancel in the queue (free), -> Unloaded
   |      - Loading    -> leave alone; discarded on arrival above
-  |      - Resident   -> UnloadRequested -> Unloading -> Unloaded
+  |      (Resident tiles are untouched here — see Cache below)
   |
-  +--> issue new requests for newly-desired tiles (throttled per call)
+  +--> TileCache::evictToBudget(desired set)   -> evicted tiles:
+  |      Resident -> UnloadRequested -> Unloading -> Unloaded
+  |
+  +--> issue new requests for newly-desired, not-yet-tracked tiles (throttled per call)
 ```
 
 Desired tiles come from `TileIndex::queryRadius` alone — not frustum
@@ -102,11 +108,54 @@ tests inject their own in-memory or artificially-delayed loaders instead
 which is what makes priority ordering and cancellation timing testable
 deterministically rather than via sleep-and-hope.
 
-## Known simplifications (Phase 6 scope)
+## Cache and memory budget (Phase 7)
 
-- No memory/GPU budget or eviction policy yet — a tile leaving
-  `streamingRadius` unloads immediately rather than lingering in an LRU
-  cache. Phase 7 adds that on top of this baseline.
+A tile leaving `streamingRadius` is **not** unloaded on the spot — it stays
+Resident, held by `TileCache`, in case the camera pans back. `TileCache`
+owns the actual `data::Tile` CPU data once a load completes (`StreamingManager`
+only tracks `ResourceState` after that point); `StreamingManager::residentTile()`
+reads through to it.
+
+Eviction runs once per `update()`, evicting the lowest-scoring cached tiles
+*not currently desired* until every budget is satisfied:
+
+- `cpuBudgetBytes` — checked against `TileMemory.h`'s
+  `estimateTileMemoryBytes()` (vertex/index buffers dominate; a coarse,
+  deliberately inexact estimate — allocator overhead isn't worth modeling).
+- `gpuBudgetBytes` — an abstraction for now: mirrors the CPU estimate,
+  since no real GPU resource exists until Phase 8 gives it something to
+  measure.
+- `maxResidentTiles` — a simple count cap.
+
+**Eviction strategy — combined score, not pure LRU or pure priority:**
+
+```
+keepScore = lastPriority - recencyWeight * framesSinceLastTouched
+```
+
+`lastPriority` is the same distance/direction score requests are queued by
+(see above); `framesSinceLastTouched` grows every `update()` a tile isn't
+in the desired set. The lowest `keepScore` is evicted first. This folds the
+project brief's "LRU", "distance/priority", and "combined" eviction
+strategy options into one tunable formula: `recencyWeight` near 0 makes
+eviction purely priority-driven (always keep the closest tiles regardless
+of how long they've sat unused); a larger `recencyWeight` makes it behave
+more like LRU (an old low-value tile loses out to a recently-relevant one
+even if their priorities are similar). Default `0.01` needs roughly 100
+untouched frames to fully offset one point of priority.
+
+Tiles in the current frame's desired set are never evicted, even if that
+means briefly exceeding budget — the budget governs the *cache* of
+retained-but-currently-unneeded tiles, not what's actively required this
+frame. `StreamingStatistics::totalCacheHits` counts desired tiles that were
+already Resident when `update()` started, i.e. reused without a reload —
+`totalCacheHits / (totalCacheHits + totalLoadsCompleted)` is the "Cache
+Hits: 87%" figure from the project brief's debug overlay mockup.
+
+## Known simplifications (Phase 6/7 scope)
+
 - A failed load is retried on the very next `update()` call (the tile
   re-enters the desired set and gets re-requested) with no backoff. Fine at
   this SDK's scale; a production system would rate-limit retries.
+- The GPU budget is a placeholder number, not a real measurement — see
+  above. Phase 8 gives it something real to track.

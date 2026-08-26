@@ -256,13 +256,25 @@ files via `SpatialTileBuilder`'s generator, builds a real `TileIndex` from
 a manifest, and streams the real files from disk through `StreamingManager`
 — not just against in-memory fakes.
 
-Memory/GPU budgets and eviction (LRU or otherwise) are explicitly out of
-scope here; a tile leaving the streaming radius unloads immediately. Phase
-7 adds a cache with a retention policy on top of this baseline.
+## Cache and memory budget (Phase 7)
+
+`spatial::streaming::TileCache` sits between the state machine and the
+actual `data::Tile` CPU data: once a load completes, `StreamingManager`
+hands the tile to the cache rather than holding it itself, and a tile
+leaving the streaming radius stays Resident (cached) instead of unloading
+immediately. Eviction is budget-driven — CPU bytes, a GPU-bytes
+abstraction (mirrors the CPU estimate; there's no real GPU resource to
+measure until Phase 8), and a tile-count cap — using a combined
+priority-plus-recency score rather than pure LRU or pure distance. Tiles
+desired this frame are never evicted, even over budget. Full design,
+including the exact eviction formula and why it subsumes the project
+brief's separate "LRU / distance / priority / combined" strategy options
+into one tunable weight, is in [streaming.md](streaming.md).
 
 ## Status
 
-This document will be extended as each phase lands. Current state: Phase 6
-(streaming manager, request queue, worker pool, state machine, cancellation,
-priority) complete, on top of Phase 5 (LOD). No memory/GPU budget, cache
-eviction, or rendering logic exists yet.
+This document will be extended as each phase lands. Current state: Phase 7
+(tile cache, memory/GPU budgets, eviction) complete, on top of Phases 5–6
+(LOD, streaming). Verified end-to-end against real generated `.tile` files
+on disk, not just in-memory fakes. No rendering, debug visualization, or
+engine integration exists yet.

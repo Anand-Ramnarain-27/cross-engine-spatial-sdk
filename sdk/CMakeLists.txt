@@ -42,10 +42,13 @@ set(SPATIAL_SDK_PUBLIC_HEADERS
     include/spatial/data/TileSerializer.h
     include/spatial/data/DatasetSerializer.h
     include/spatial/data/TileIndex.h
+    include/spatial/data/TileMemory.h
     include/spatial/streaming/ResourceState.h
     include/spatial/streaming/TileRequest.h
     include/spatial/streaming/RequestQueue.h
     include/spatial/streaming/WorkerPool.h
+    include/spatial/streaming/MemoryBudget.h
+    include/spatial/streaming/TileCache.h
     include/spatial/streaming/StreamingManager.h
 )
 
@@ -60,6 +63,7 @@ set(SPATIAL_SDK_SOURCES
     src/data/TileIndex.cpp
     src/streaming/RequestQueue.cpp
     src/streaming/WorkerPool.cpp
+    src/streaming/TileCache.cpp
     src/streaming/StreamingManager.cpp
 )
 
