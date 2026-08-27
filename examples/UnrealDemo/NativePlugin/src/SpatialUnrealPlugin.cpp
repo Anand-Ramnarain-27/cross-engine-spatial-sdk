@@ -1,74 +1,73 @@
-#include "SpatialUnityPlugin.h"
+#include "SpatialUnrealPlugin.h"
 
-#include <algorithm>
 #include <cstring>
 
 #include "spatial/SpatialWorld.h"
 
 #include "ManagedMeshRenderer.h"
+#include "UnrealCoordinateConversion.h"
 
 using namespace spatial;
+namespace conv = spatial::examples::unreal_convert;
 
 namespace
 {
-    // Renderer must outlive world: world's GPU resources (as tracked by
-    // ManagedMeshRenderer) reference ids it owns. Declaring renderer first
-    // means it's destroyed after world — see docs/sdk_api.md's lifetime
-    // rule, the same one StandaloneViewer and SpatialWorldTests follow.
+    // renderer must outlive world — same lifetime rule as SpatialUnityPlugin
+    // and documented throughout docs/sdk_api.md.
     struct PluginState
     {
         examples::ManagedMeshRenderer renderer;
         SpatialWorld world;
     };
 
-    PluginState& stateOf(SpatialUnityWorldHandle handle)
+    PluginState& stateOf(SpatialUnrealWorldHandle handle)
     {
         return *static_cast<PluginState*>(handle);
     }
 
-    core::CameraParams toCameraParams(const SpatialUnityCameraParams& c)
+    core::CameraParams toCameraParams(const SpatialUnrealCameraParams& c)
     {
         core::CameraParams camera{};
-        camera.position = core::Vec3{c.posX, c.posY, c.posZ};
-        camera.forward = core::Vec3{c.fwdX, c.fwdY, c.fwdZ}.normalized();
+        camera.position = conv::toSpatialPosition(c.posX, c.posY, c.posZ);
+        camera.forward = conv::toSpatialDirection(c.fwdX, c.fwdY, c.fwdZ).normalized();
         camera.verticalFovRadians = c.verticalFovRadians;
         camera.viewportHeightPx = c.viewportHeightPx;
         return camera;
     }
 
-    SpatialUnityResult toResult(ErrorCode code)
+    SpatialUnrealResult toResult(ErrorCode code)
     {
         switch (code)
         {
-            case ErrorCode::DatasetNotFound: return SpatialUnityResult_DatasetNotFound;
-            case ErrorCode::InvalidDataset: return SpatialUnityResult_InvalidDataset;
-            case ErrorCode::UnsupportedVersion: return SpatialUnityResult_UnsupportedVersion;
-            case ErrorCode::TileLoadFailed: return SpatialUnityResult_TileLoadFailed;
-            case ErrorCode::CorruptTile: return SpatialUnityResult_CorruptTile;
-            case ErrorCode::OutOfMemory: return SpatialUnityResult_OutOfMemory;
-            case ErrorCode::GPUUploadFailed: return SpatialUnityResult_GPUUploadFailed;
-            case ErrorCode::InvalidState: return SpatialUnityResult_InvalidState;
+            case ErrorCode::DatasetNotFound: return SpatialUnrealResult_DatasetNotFound;
+            case ErrorCode::InvalidDataset: return SpatialUnrealResult_InvalidDataset;
+            case ErrorCode::UnsupportedVersion: return SpatialUnrealResult_UnsupportedVersion;
+            case ErrorCode::TileLoadFailed: return SpatialUnrealResult_TileLoadFailed;
+            case ErrorCode::CorruptTile: return SpatialUnrealResult_CorruptTile;
+            case ErrorCode::OutOfMemory: return SpatialUnrealResult_OutOfMemory;
+            case ErrorCode::GPUUploadFailed: return SpatialUnrealResult_GPUUploadFailed;
+            case ErrorCode::InvalidState: return SpatialUnrealResult_InvalidState;
         }
-        return SpatialUnityResult_InvalidState;
+        return SpatialUnrealResult_InvalidState;
     }
 }
 
-SpatialUnityWorldHandle SpatialUnity_CreateWorld()
+SpatialUnrealWorldHandle SpatialUnreal_CreateWorld()
 {
     return new PluginState();
 }
 
-void SpatialUnity_DestroyWorld(SpatialUnityWorldHandle world)
+void SpatialUnreal_DestroyWorld(SpatialUnrealWorldHandle world)
 {
     delete static_cast<PluginState*>(world);
 }
 
-SpatialUnityResult SpatialUnity_LoadDataset(SpatialUnityWorldHandle world, const char* manifestPath, SpatialUnityLoadConfig config)
+SpatialUnrealResult SpatialUnreal_LoadDataset(SpatialUnrealWorldHandle world, const char* manifestPath, SpatialUnrealLoadConfig config)
 {
     PluginState& state = stateOf(world);
 
     SpatialWorldConfig sdkConfig{};
-    sdkConfig.streaming.streamingRadius = config.streamingRadius;
+    sdkConfig.streaming.streamingRadius = config.streamingRadiusCm / conv::kMetersToCentimeters;
     sdkConfig.streaming.memoryBudget.maxResidentTiles = config.maxResidentTiles;
     sdkConfig.streaming.memoryBudget.cpuBudgetBytes = config.cpuMemoryBudgetBytes;
     sdkConfig.streaming.workerThreadCount = config.workerThreadCount;
@@ -76,56 +75,52 @@ SpatialUnityResult SpatialUnity_LoadDataset(SpatialUnityWorldHandle world, const
     sdkConfig.debugVisualizationEnabled = config.debugVisualizationEnabled != 0;
 
     const Expected<void> result = state.world.loadDataset(manifestPath, sdkConfig);
-    return result.hasValue() ? SpatialUnityResult_Ok : toResult(result.error().code);
+    return result.hasValue() ? SpatialUnrealResult_Ok : toResult(result.error().code);
 }
 
-void SpatialUnity_Shutdown(SpatialUnityWorldHandle world)
+void SpatialUnreal_Shutdown(SpatialUnrealWorldHandle world)
 {
     stateOf(world).world.shutdown();
 }
 
-int32_t SpatialUnity_IsLoaded(SpatialUnityWorldHandle world)
+int32_t SpatialUnreal_IsLoaded(SpatialUnrealWorldHandle world)
 {
     return stateOf(world).world.isLoaded() ? 1 : 0;
 }
 
-std::uint32_t SpatialUnity_GetDatasetMaxLOD(SpatialUnityWorldHandle world)
+std::uint32_t SpatialUnreal_GetDatasetMaxLOD(SpatialUnrealWorldHandle world)
 {
     PluginState& state = stateOf(world);
     return state.world.isLoaded() ? state.world.datasetManifest().maxLOD : 0;
 }
 
-void SpatialUnity_SetDebugVisualization(SpatialUnityWorldHandle world, int32_t enabled)
+void SpatialUnreal_SetDebugVisualization(SpatialUnrealWorldHandle world, int32_t enabled)
 {
     stateOf(world).world.setDebugVisualizationEnabled(enabled != 0);
 }
 
-int32_t SpatialUnity_GetDebugVisualization(SpatialUnityWorldHandle world)
+int32_t SpatialUnreal_GetDebugVisualization(SpatialUnrealWorldHandle world)
 {
     return stateOf(world).world.debugVisualizationEnabled() ? 1 : 0;
 }
 
-void SpatialUnity_Update(SpatialUnityWorldHandle world, SpatialUnityCameraParams camera)
+void SpatialUnreal_Update(SpatialUnrealWorldHandle world, SpatialUnrealCameraParams camera)
 {
     PluginState& state = stateOf(world);
     state.world.update(toCameraParams(camera), state.renderer);
 }
 
-void SpatialUnity_Render(SpatialUnityWorldHandle world, SpatialUnityCameraParams camera)
+void SpatialUnreal_Render(SpatialUnrealWorldHandle world, SpatialUnrealCameraParams camera)
 {
     PluginState& state = stateOf(world);
     const core::CameraParams cameraParams = toCameraParams(camera);
 
-    // beginFrame()/endFrame() bracket world.render() the same way
-    // StandaloneViewer's main loop brackets it around a real renderer;
-    // beginFrame() is what clears ManagedMeshRenderer's per-frame draw
-    // command / debug line lists.
     state.renderer.beginFrame(core::Mat4::identity());
     state.world.render(state.renderer, cameraParams);
     state.renderer.endFrame();
 }
 
-void SpatialUnity_GetStatistics(SpatialUnityWorldHandle world, SpatialUnityStatistics* outStats)
+void SpatialUnreal_GetStatistics(SpatialUnrealWorldHandle world, SpatialUnrealStatistics* outStats)
 {
     if (outStats == nullptr)
     {
@@ -144,12 +139,12 @@ void SpatialUnity_GetStatistics(SpatialUnityWorldHandle world, SpatialUnityStati
     outStats->totalCacheHits = stats.totalCacheHits;
 }
 
-int32_t SpatialUnity_GetDrawCommandCount(SpatialUnityWorldHandle world)
+int32_t SpatialUnreal_GetDrawCommandCount(SpatialUnrealWorldHandle world)
 {
     return static_cast<int32_t>(stateOf(world).renderer.drawCommands().size());
 }
 
-void SpatialUnity_GetDrawCommands(SpatialUnityWorldHandle world, int64_t* outMeshIds, int64_t* outMaterialIds, float* outTransforms16)
+void SpatialUnreal_GetDrawCommands(SpatialUnrealWorldHandle world, int64_t* outMeshIds, int64_t* outMaterialIds, float* outTransforms16)
 {
     const auto& commands = stateOf(world).renderer.drawCommands();
     for (std::size_t i = 0; i < commands.size(); ++i)
@@ -165,31 +160,32 @@ void SpatialUnity_GetDrawCommands(SpatialUnityWorldHandle world, int64_t* outMes
         }
         if (outTransforms16 != nullptr)
         {
+            const core::Mat4 ueTransform = conv::transform(cmd.worldTransform);
             float* dst = outTransforms16 + (i * 16);
             for (int row = 0; row < 4; ++row)
             {
                 for (int col = 0; col < 4; ++col)
                 {
-                    dst[(row * 4) + col] = cmd.worldTransform.m[row][col];
+                    dst[(row * 4) + col] = ueTransform.m[row][col];
                 }
             }
         }
     }
 }
 
-int32_t SpatialUnity_GetMeshVertexCount(SpatialUnityWorldHandle world, int64_t meshId)
+int32_t SpatialUnreal_GetMeshVertexCount(SpatialUnrealWorldHandle world, int64_t meshId)
 {
     const auto* mesh = stateOf(world).renderer.findMesh(static_cast<std::uint64_t>(meshId));
     return mesh != nullptr ? static_cast<int32_t>(mesh->vertices.size()) : 0;
 }
 
-int32_t SpatialUnity_GetMeshIndexCount(SpatialUnityWorldHandle world, int64_t meshId)
+int32_t SpatialUnreal_GetMeshIndexCount(SpatialUnrealWorldHandle world, int64_t meshId)
 {
     const auto* mesh = stateOf(world).renderer.findMesh(static_cast<std::uint64_t>(meshId));
     return mesh != nullptr ? static_cast<int32_t>(mesh->indices.size()) : 0;
 }
 
-int32_t SpatialUnity_GetMeshData(SpatialUnityWorldHandle world, int64_t meshId, float* outPositions3, float* outNormals3, float* outUVs2, int32_t* outIndices)
+int32_t SpatialUnreal_GetMeshData(SpatialUnrealWorldHandle world, int64_t meshId, float* outPositions3, float* outNormals3, float* outUVs2, int32_t* outIndices)
 {
     const auto* mesh = stateOf(world).renderer.findMesh(static_cast<std::uint64_t>(meshId));
     if (mesh == nullptr)
@@ -202,15 +198,11 @@ int32_t SpatialUnity_GetMeshData(SpatialUnityWorldHandle world, int64_t meshId, 
         const data::Vertex& v = mesh->vertices[i];
         if (outPositions3 != nullptr)
         {
-            outPositions3[(i * 3) + 0] = v.position.x;
-            outPositions3[(i * 3) + 1] = v.position.y;
-            outPositions3[(i * 3) + 2] = v.position.z;
+            conv::position(v.position.x, v.position.y, v.position.z, outPositions3[(i * 3) + 0], outPositions3[(i * 3) + 1], outPositions3[(i * 3) + 2]);
         }
         if (outNormals3 != nullptr)
         {
-            outNormals3[(i * 3) + 0] = v.normal.x;
-            outNormals3[(i * 3) + 1] = v.normal.y;
-            outNormals3[(i * 3) + 2] = v.normal.z;
+            conv::direction(v.normal.x, v.normal.y, v.normal.z, outNormals3[(i * 3) + 0], outNormals3[(i * 3) + 1], outNormals3[(i * 3) + 2]);
         }
         if (outUVs2 != nullptr)
         {
@@ -219,18 +211,24 @@ int32_t SpatialUnity_GetMeshData(SpatialUnityWorldHandle world, int64_t meshId, 
         }
     }
 
+    // Reversing handedness (the axis swap in conv::position/direction)
+    // flips front-face winding, so each triangle's last two indices are
+    // swapped here to restore Unreal's expected front-face winding — same
+    // fix as examples/UnityDemo's mesh building, done natively instead.
     if (outIndices != nullptr)
     {
-        for (std::size_t i = 0; i < mesh->indices.size(); ++i)
+        for (std::size_t i = 0; i + 2 < mesh->indices.size(); i += 3)
         {
-            outIndices[i] = static_cast<int32_t>(mesh->indices[i]);
+            outIndices[i + 0] = static_cast<int32_t>(mesh->indices[i + 0]);
+            outIndices[i + 1] = static_cast<int32_t>(mesh->indices[i + 2]);
+            outIndices[i + 2] = static_cast<int32_t>(mesh->indices[i + 1]);
         }
     }
 
     return 1;
 }
 
-int32_t SpatialUnity_GetMaterialColor(SpatialUnityWorldHandle world, int64_t materialId, float* outRGBA4)
+int32_t SpatialUnreal_GetMaterialColor(SpatialUnrealWorldHandle world, int64_t materialId, float* outRGBA4)
 {
     const auto* material = stateOf(world).renderer.findMaterial(static_cast<std::uint64_t>(materialId));
     if (material == nullptr || outRGBA4 == nullptr)
@@ -241,12 +239,12 @@ int32_t SpatialUnity_GetMaterialColor(SpatialUnityWorldHandle world, int64_t mat
     return 1;
 }
 
-int32_t SpatialUnity_GetDebugLineVertexCount(SpatialUnityWorldHandle world)
+int32_t SpatialUnreal_GetDebugLineVertexCount(SpatialUnrealWorldHandle world)
 {
     return static_cast<int32_t>(stateOf(world).renderer.debugLines().size());
 }
 
-void SpatialUnity_GetDebugLineData(SpatialUnityWorldHandle world, float* outPositions3, float* outColors4)
+void SpatialUnreal_GetDebugLineData(SpatialUnrealWorldHandle world, float* outPositions3, float* outColors4)
 {
     const auto& lines = stateOf(world).renderer.debugLines();
     for (std::size_t i = 0; i < lines.size(); ++i)
@@ -254,9 +252,7 @@ void SpatialUnity_GetDebugLineData(SpatialUnityWorldHandle world, float* outPosi
         const rendering::DebugVertex& v = lines[i];
         if (outPositions3 != nullptr)
         {
-            outPositions3[(i * 3) + 0] = v.position.x;
-            outPositions3[(i * 3) + 1] = v.position.y;
-            outPositions3[(i * 3) + 2] = v.position.z;
+            conv::position(v.position.x, v.position.y, v.position.z, outPositions3[(i * 3) + 0], outPositions3[(i * 3) + 1], outPositions3[(i * 3) + 2]);
         }
         if (outColors4 != nullptr)
         {

@@ -42,10 +42,18 @@ examples/UnityDemo/UnityProject/Assets/StreamingAssets/SpatialSDK/DemoCity/
 *.unityproj
 
 # Unreal
-examples/UnrealDemo/Binaries/
-examples/UnrealDemo/Intermediate/
-examples/UnrealDemo/DerivedDataCache/
-examples/UnrealDemo/Saved/
+examples/UnrealDemo/UnrealProject/Binaries/
+examples/UnrealDemo/UnrealProject/Intermediate/
+examples/UnrealDemo/UnrealProject/DerivedDataCache/
+examples/UnrealDemo/UnrealProject/Saved/
+examples/UnrealDemo/UnrealProject/Plugins/SpatialSDKPlugin/Binaries/
+examples/UnrealDemo/UnrealProject/Plugins/SpatialSDKPlugin/Intermediate/
+# Native plugin DLL/.lib/header — a build artifact of
+# examples/UnrealDemo/NativePlugin, staged here automatically by its CMake
+# target; not committed, same as any other build output.
+examples/UnrealDemo/UnrealProject/Plugins/SpatialSDKPlugin/Source/ThirdParty/SpatialUnrealPlugin/
+# Demo dataset — reproducible via SpatialTileBuilder; see examples/UnrealDemo/README.md.
+examples/UnrealDemo/UnrealProject/SpatialSDKData/DemoCity/
 
 # Generated datasets (reproducible via SpatialTileBuilder; see docs/getting_started.md)
 assets/datasets/*/

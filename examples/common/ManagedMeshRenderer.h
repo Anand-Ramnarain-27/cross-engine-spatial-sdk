@@ -6,16 +6,21 @@
 
 #include "spatial/rendering/IRenderer.h"
 
-namespace spatial::unity
+namespace spatial::examples
 {
-    // IRenderer for the Unity native plugin. Unlike D3D11Renderer, this
-    // implementation never touches a graphics API: create*/destroy* just
-    // manage CPU-side storage keyed by a fresh id, and drawMesh/drawDebugLines
-    // record what was submitted for the current frame. SpatialUnityPlugin.cpp
-    // exposes that state across a flat C API; the C# side (SpatialWorldNative.cs
-    // + SpatialWorldComponent.cs) pulls it and turns it into real
-    // UnityEngine.Mesh objects drawn with Graphics.DrawMesh. See
-    // examples/UnityDemo/README.md for the full rationale.
+    // IRenderer shared by every "managed mesh bridge" native plugin
+    // (currently SpatialUnityPlugin and SpatialUnrealPlugin). Unlike
+    // D3D11Renderer, this implementation never touches a graphics API:
+    // create*/destroy* just manage CPU-side storage keyed by a fresh id,
+    // and drawMesh/drawDebugLines record what was submitted for the
+    // current frame. Each engine's plugin exposes that state across its
+    // own flat C API; the engine-side code pulls it and turns it into
+    // real engine geometry (UnityEngine.Mesh + Graphics.DrawMesh,
+    // UProceduralMeshComponent, etc). Genuinely engine-agnostic — nothing
+    // here references Unity or Unreal — which is why it lives in
+    // examples/common rather than under either engine's demo folder. See
+    // docs/unity_integration.md / docs/unreal_integration.md for the
+    // per-engine rationale.
     class ManagedMeshRenderer final : public rendering::IRenderer
     {
     public:

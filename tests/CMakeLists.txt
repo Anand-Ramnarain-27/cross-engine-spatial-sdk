@@ -44,11 +44,14 @@ set(SPATIAL_SDK_TEST_SOURCES
     SpatialWorldTests.cpp
     examples/FlyCameraTests.cpp
     examples/SpatialUnityPluginTests.cpp
+    examples/SpatialUnrealPluginTests.cpp
+    examples/UnrealCoordinateConversionTests.cpp
     tools/ProceduralCityTests.cpp
     ${CMAKE_SOURCE_DIR}/tools/TileBuilder/src/ProceduralCity.cpp
     ${CMAKE_SOURCE_DIR}/examples/StandaloneViewer/src/FlyCamera.cpp
-    ${CMAKE_SOURCE_DIR}/examples/UnityDemo/NativePlugin/src/ManagedMeshRenderer.cpp
+    ${CMAKE_SOURCE_DIR}/examples/common/ManagedMeshRenderer.cpp
     ${CMAKE_SOURCE_DIR}/examples/UnityDemo/NativePlugin/src/SpatialUnityPlugin.cpp
+    ${CMAKE_SOURCE_DIR}/examples/UnrealDemo/NativePlugin/src/SpatialUnrealPlugin.cpp
 )
 
 add_executable(${SPATIAL_SDK_TEST_TARGET} ${SPATIAL_SDK_TEST_SOURCES})
@@ -57,7 +60,9 @@ target_include_directories(${SPATIAL_SDK_TEST_TARGET}
     PRIVATE
         ${CMAKE_SOURCE_DIR}/tools/TileBuilder/src
         ${CMAKE_SOURCE_DIR}/examples/StandaloneViewer/src
+        ${CMAKE_SOURCE_DIR}/examples/common
         ${CMAKE_SOURCE_DIR}/examples/UnityDemo/NativePlugin/src
+        ${CMAKE_SOURCE_DIR}/examples/UnrealDemo/NativePlugin/src
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 

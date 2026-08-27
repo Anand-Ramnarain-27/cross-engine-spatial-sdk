@@ -5,6 +5,68 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 11: Unreal Integration
+
+- `examples/UnrealDemo/NativePlugin` — a second, independent C++ CMake
+  target (`SpatialUnrealPlugin.dll`) wrapping `spatial::SpatialWorld`
+  behind its own flat C ABI (`SpatialUnrealPlugin.h/.cpp`) — not shared
+  with `SpatialUnityPlugin.dll`, deliberately: real cross-engine SDKs ship
+  a plugin binary per engine, matching this project's own architecture
+  diagram. Unlike Unity (forced into a C ABI by P/Invoke), Unreal plugins
+  are C++-native, so direct linkage of `spatial_sdk.lib` was the first
+  option considered and rejected: Unreal pins its own MSVC toolset/CRT
+  settings per engine release with no guarantee they match this repo's own
+  CMake build, and a mismatch there is silent heap corruption at a C++
+  ABI boundary, not a compile error. `examples/common/ManagedMeshRenderer`
+  (moved out of `examples/UnityDemo/NativePlugin` — genuinely
+  engine-agnostic, so now shared by both plugins) is the `IRenderer`
+  behind it, same "managed mesh bridge" scope call as Unity's
+  `Graphics.DrawMesh`, here backing `UProceduralMeshComponent`.
+- `UnrealCoordinateConversion.h` — right-handed/Y-up/meters (the SDK) <->
+  Unreal's left-handed/Z-up/centimeters: a bigger mismatch than Unity's
+  (an axis swap plus 100x scale, not just a sign flip). Unlike Unity
+  (where the equivalent conversion lives in C#), this lives natively in
+  `SpatialUnrealPlugin.cpp` — every exported function hands back
+  Unreal-space-ready data, so `USpatialWorldComponent` does zero
+  conversion math of its own. That's what makes the conversion provable by
+  this repo's own Catch2 suite
+  (`tests/examples/UnrealCoordinateConversionTests.cpp`,
+  `SpatialUnrealPluginTests.cpp`) instead of only by looking at the
+  screen — the same category of bug as Phase 9's HLSL row-major/`mul()`
+  mismatch, given the same treatment.
+- `UnrealProject/Plugins/SpatialSDKPlugin` — `USpatialWorldComponent` (the
+  brief's suggested class name exactly), linked against the native plugin
+  as a prebuilt ThirdParty binary. Compiled clean via real
+  `UnrealBuildTool` against installed UE 5.6.1, `/W4`-clean C++ on the
+  native side. `SpatialSDKDemoGameMode`/`Pawn`/`Actor` spawn the demo
+  entirely in code (no hand-placed level content) specifically so running
+  it doesn't depend on GUI interaction that wasn't reliably available in
+  this environment — see below.
+- **Runtime-verified by actually running the compiled game and reading
+  Unreal's own log**, not just by compiling: streaming converges to
+  `resident=16 loading=0 requested=0 drawCommands=32` (the full 4x4 tile
+  grid) and holds steady across hundreds of frames with zero errors.
+- **Two real bugs found and fixed via the user's own screenshot** (a
+  computer-use limitation — the same one hit with `StandaloneViewer` in
+  Phase 9 — meant this session couldn't see the rendered window itself, so
+  the user opened the project and pressed Play): (1) the scene had no
+  light at all, so every `UProceduralMeshComponent` section rendered pure
+  black against an equally black empty-sky background —
+  `SpatialSDKDemoGameMode` now spawns an `ADirectionalLight`; (2) caught by
+  inspection while fixing (1), not by symptom — `FMatrix` uses Unreal's
+  row-vector convention (translation in the last row), the opposite of the
+  SDK's column-vector `Mat4` (translation in the last column), confirmed
+  against the engine's own `TranslationMatrix.h` rather than assumed.
+  Harmless today since `SpatialWorld` only ever passes an identity
+  transform, but a real bug waiting for the first non-identity one;
+  `BuildTransform()` now transposes correctly. After both fixes: solid,
+  correctly-lit buildings with visible light/shadow faces, confirming the
+  coordinate-conversion winding fix visually, not just by unit test.
+- 14 new automated SDK tests (6 exercising the `SpatialUnreal_*` C ABI end
+  to end, 8 pure conversion-math tests), 181 total (up from 167
+  pre-Phase-11), all green, including a full
+  `SPATIAL_SDK_WARNINGS_AS_ERRORS=ON` rebuild.
+
 ### Added — Phase 10: Unity Integration
 
 - `examples/UnityDemo/NativePlugin` — a C++ CMake target

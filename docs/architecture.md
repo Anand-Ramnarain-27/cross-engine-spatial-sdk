@@ -405,14 +405,75 @@ compiles," but actually entering Play mode in the Unity Editor and
 confirming the rendered buildings are solid and correctly shaded rather
 than mirrored or inside-out.
 
+## Unreal integration (Phase 11)
+
+A second, independent native plugin (`SpatialUnrealPlugin`,
+`examples/UnrealDemo`) — not the same binary as `SpatialUnityPlugin`, and
+not because it couldn't be shared: real cross-engine SDKs ship a plugin
+per engine, and this repo's own architecture diagram already draws
+Unity/Unreal/custom-C++ as three separate boxes hanging off the SDK, not
+one binary all three share. The C ABI decision itself repeats for a
+different reason than Unity's: Unity is forced into one by P/Invoke, but
+Unreal plugins are C++-native, so linking `spatial_sdk.lib` directly into
+the plugin module was the first option considered. It's rejected because
+Unreal pins its own MSVC toolset/CRT settings per engine release with no
+guarantee they match whatever this repo's own CMake build used — and a
+mismatch there is undefined behavior at every `std::string`/`std::vector`
+crossing the boundary, not a compile error. `ManagedMeshRenderer` (the
+`IRenderer` behind both plugins) turned out to be genuinely
+engine-agnostic once written, so it moved to `examples/common` and is now
+shared — implementation reuse, not an architecture coupling between the
+two plugins.
+
+The coordinate conversion is a bigger mismatch than Unity's — Unreal is
+left-handed *and* Z-up *and* centimeters, not just left-handed — and it's
+handled differently on purpose: natively, inside `SpatialUnrealPlugin.cpp`,
+rather than in host-language code the way Unity's `CoordinateConversion.cs`
+does it. Every `SpatialUnreal_Get*` function hands back data that's
+already Unreal-space; `USpatialWorldComponent` does no conversion math at
+all. This is possible because the conversion needs to live in *some* C++
+binary either way here (unlike Unity, there's no separate host-language
+layer forcing the choice), and it means the single most error-prone part
+of this boundary is provable by this repo's own Catch2 suite
+(`UnrealCoordinateConversionTests.cpp`) instead of only by looking at the
+screen — a real refinement over Phase 10's arrangement, not a retrofit of
+it (Unity's plugin already shipped, verified, and nothing there needed
+fixing).
+
+`SpatialUnrealPlugin` compiled `/W4`-clean through this repo's own CMake
+and is covered by 14 new Catch2 tests; `USpatialWorldComponent` and the
+demo project compiled clean through real `UnrealBuildTool` against
+installed UE 5.6.1; running the compiled game showed streaming actually
+converge (`resident=16 loading=0 requested=0 drawCommands=32`, the full
+dataset, steady across hundreds of frames, zero log errors). A
+computer-use tooling limitation (the same one hit with `StandaloneViewer`
+in Phase 9) meant this session couldn't screenshot the rendered window
+itself, so the user opened the project and pressed Play — first result: a
+black viewport, because the scene had no light source at all and
+Unreal's default material is lit, not unlit. `SpatialSDKDemoGameMode` now
+spawns an `ADirectionalLight`. Fixing that surfaced a second, unrelated
+bug caught by inspection rather than symptom: `FMatrix` uses Unreal's
+row-vector convention (translation in the last row) — the opposite of the
+SDK's column-vector `Mat4` (translation in the last column), confirmed
+against the engine's own `TranslationMatrix.h` — so `BuildTransform()` was
+silently transposing (invisible today, since `SpatialWorld` only ever
+passes an identity transform; identity is its own transpose). Both fixed,
+the user's next screenshot showed solid, correctly-lit buildings with
+real light/shadow faces — visual confirmation, not just a unit test, that
+the coordinate-conversion winding fix is actually correct. See
+`examples/UnrealDemo/README.md`'s "What was actually verified" section for
+the full accounting.
+
 ## Status
 
 This document will be extended as each phase lands. Current state: Phase
-10 (Unity native plugin + C# integration, verified live in the Unity
-Editor) complete, on top of Phase 9 (standalone viewer, D3D11 backend,
-`SpatialWorld` public API façade, full Streaming+LOD+Rendering+Debug
-wiring, real per-dataset height bounds) and Phases 4–8. 167 automated SDK
-tests (the viewer and the Unity demo are both GPU/Editor-dependent and
-aren't part of that suite — see [rendering.md](rendering.md) for why
-platform backends are verified by actually running them instead). No
-Unreal or custom-engine integration, or profiling tooling, exists yet.
+11 (Unreal native plugin + `USpatialWorldComponent`, compiled and run
+against real UE 5.6.1) complete, on top of Phase 10 (Unity native plugin +
+C# integration, verified live in the Unity Editor), Phase 9 (standalone
+viewer, D3D11 backend, `SpatialWorld` public API façade, full
+Streaming+LOD+Rendering+Debug wiring, real per-dataset height bounds), and
+Phases 4–8. 181 automated SDK tests (the viewer and both engine demos are
+GPU/Editor-dependent and aren't part of that suite — see
+[rendering.md](rendering.md) for why platform backends are verified by
+actually running them instead). No custom-engine integration or profiling
+tooling exists yet.

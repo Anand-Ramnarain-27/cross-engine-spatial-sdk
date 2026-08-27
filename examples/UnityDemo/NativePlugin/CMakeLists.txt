@@ -9,13 +9,13 @@ endif()
 add_library(SpatialUnityPlugin SHARED
     src/SpatialUnityPlugin.h
     src/SpatialUnityPlugin.cpp
-    src/ManagedMeshRenderer.h
-    src/ManagedMeshRenderer.cpp
+    ${CMAKE_SOURCE_DIR}/examples/common/ManagedMeshRenderer.h
+    ${CMAKE_SOURCE_DIR}/examples/common/ManagedMeshRenderer.cpp
 )
 
 target_link_libraries(SpatialUnityPlugin PRIVATE spatial::sdk)
 target_compile_features(SpatialUnityPlugin PRIVATE cxx_std_20)
-target_include_directories(SpatialUnityPlugin PRIVATE src)
+target_include_directories(SpatialUnityPlugin PRIVATE src ${CMAKE_SOURCE_DIR}/examples/common)
 
 if(MSVC)
     target_compile_options(SpatialUnityPlugin PRIVATE /W4)

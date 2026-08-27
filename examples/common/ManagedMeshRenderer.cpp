@@ -1,6 +1,6 @@
 #include "ManagedMeshRenderer.h"
 
-namespace spatial::unity
+namespace spatial::examples
 {
     void ManagedMeshRenderer::beginFrame(const core::Mat4& /*viewProjection*/)
     {
