@@ -5,6 +5,35 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 14: Portfolio Polish (in progress)
+
+- `docs/case_study.md` (new) — design-decision rationale (coordinate
+  convention, quadtree vs. tile-specific index, SSE+hysteresis LOD,
+  priority/cancellable streaming, combined-score cache eviction, C-ABI vs.
+  direct-linkage per engine), a consolidated list of real bugs found
+  during integration work with root cause and fix, and a stress-test
+  section (below).
+- Stress test: two new procedurally generated datasets alongside the
+  existing 1,024-tile `BigCity` — `MidCity` (4,096 tiles, 64x64 grid) and
+  `MegaCity` (16,384 tiles, 128x128 grid), same generator settings
+  (`--tile-size 100 --max-lod 3`, default building density). Measured
+  streaming (bounded radius/budget) vs. full residency (widened radius
+  and budget until every tile loads) on all three: streaming keeps the
+  resident working set and CPU memory essentially flat across a 16x
+  dataset size increase (66-68 tiles / ~1-3 MB resident regardless of
+  total dataset size), while full residency grows roughly linearly in
+  memory (44.7 MB -> 268 MB) and worse than linearly in load time (~12 s
+  -> not converged after 90 s for the largest dataset). Full numbers and
+  methodology in `docs/case_study.md`.
+- `README.md` — rewritten opening section (feature checklist, layered
+  architecture diagram, streaming-vs-full-residency table up front),
+  status section updated for the Phase 14 in-progress state, and a link
+  to the new case study.
+- `docs/images/megacity_stress_test.png` — a new screenshot of
+  `StandaloneViewer` running against the 16,384-tile `MegaCity` stress-test
+  dataset (debug tile-bounds overlay on, live streaming/profiling stats in
+  the title bar), referenced from both `README.md` and `case_study.md`.
+
 ### Added — Phase 13: Profiling Tooling
 
 - `spatial::debug::Profiler` (`sdk/include/spatial/debug/Profiler.h`) —
