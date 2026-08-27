@@ -26,40 +26,30 @@ color-coded tile bounds. Title bar shows live streaming stats.*
 
 ## Status
 
-**Phase 11 of 14 — Unreal integration, on top of the Phase 10 Unity plugin,
-the Phase 9 standalone viewer, and the `SpatialWorld` API façade.** The SDK
-now has a complete, runnable demonstration: core spatial math; a binary
-tile format with a JSON manifest and a `SpatialTileBuilder` CLI that
-generates a procedural city; a generic quadtree spatial index;
-distance/screen-space-error LOD selection with hysteresis; a fully
-multithreaded streaming manager (request queue, worker pool, validated
-resource state machine, priority, cancellation); a memory-budgeted tile
-cache with combined priority/recency eviction; an engine-agnostic
-rendering abstraction (`IRenderer`, RAII GPU resources, a bounded upload
-queue, batched debug-line rendering); **`StandaloneViewer`** — a real
-Win32 window, a real Direct3D 11 backend, and all of the above wired
-together against a real generated dataset; **`spatial::SpatialWorld`** —
-the single façade class an engine integration owns instead of wiring five
-subsystems together itself; a **Unity native plugin**
-(`examples/UnityDemo`) verified live in the Editor; and now an **Unreal
-native plugin** (`examples/UnrealDemo`) — a second, independent C ABI
-(`SpatialUnrealPlugin`) doing its own right-handed/meters ->
-left-handed/Z-up/centimeters conversion natively (unit tested directly,
-not just eyeballed), and `USpatialWorldComponent`, compiled clean through
-real `UnrealBuildTool` against installed UE 5.6.1, verified by actually
-running the compiled game and reading Unreal's own log (streaming
-converges to the full 4x4 tile grid resident with zero errors), and
-verified live on screen — the user's own Play-In-Editor screenshot caught
-a missing-light bug and a latent `FMatrix`/`Mat4` transpose bug, both
-fixed, before showing solid, correctly-lit buildings. 181 automated SDK
-tests, all green; the viewer, the
-Unity demo, and the Unreal demo are all verified by actually running
-them — including the screenshot above. See
-[docs/architecture.md](docs/architecture.md) for the full design and
-phased development plan, and [CHANGELOG.md](CHANGELOG.md) for what landed
-in each phase.
+**Phase 12 of 14.** Complete: core spatial math; a binary tile format with
+a JSON manifest and a `SpatialTileBuilder` CLI that generates a procedural
+city; a generic quadtree spatial index; distance/screen-space-error LOD
+selection with hysteresis; a multithreaded streaming manager (request
+queue, worker pool, validated resource state machine, priority,
+cancellation); a memory-budgeted tile cache with combined priority/recency
+eviction; an engine-agnostic rendering abstraction (`IRenderer`, RAII GPU
+resources, a bounded upload queue, batched debug-line rendering);
+**`StandaloneViewer`** — a Win32 window and Direct3D 11 backend wiring the
+above against a generated dataset; **`spatial::SpatialWorld`** — the
+single façade class an engine integration owns instead of wiring five
+subsystems together itself; a **Unity native plugin**; an **Unreal native
+plugin**; and a **custom-engine integration** — validated against an
+independent DirectX 12 engine, linking `spatial_sdk` directly rather than
+through a C ABI, with no coordinate conversion needed since that engine
+shares the SDK's own right-handed/Y-up convention.
 
-Not yet built: custom-engine integration and profiling tooling.
+181 automated SDK tests, all green. The viewer and both engine plugins are
+runnable end to end. See [docs/architecture.md](docs/architecture.md) for
+the full design and phased development plan, and
+[CHANGELOG.md](CHANGELOG.md) for what landed in each phase.
+
+Not yet built: profiling tooling (Phase 13) and final portfolio polish
+(Phase 14).
 
 ## Planned capabilities
 
@@ -74,11 +64,10 @@ Not yet built: custom-engine integration and profiling tooling.
       streamed world, LOD, debug visualization, runtime stats
 - [x] A `SpatialWorld` public API façade tying the above together for
       engine integrations to build on
-- [x] A Unity plugin (native C ABI + C# layer + `SpatialWorldComponent`),
-      verified live in the Unity Editor
-- [x] An Unreal plugin (native C ABI + `USpatialWorldComponent`), compiled
-      and run against real UE 5.6.1
-- [ ] Custom-engine integration, driven by the same core
+- [x] A Unity plugin (native C ABI + C# layer + `SpatialWorldComponent`)
+- [x] An Unreal plugin (native C ABI + `USpatialWorldComponent`)
+- [x] A custom-engine integration (direct C++ linkage, zero coordinate
+      conversion) validated against a real DirectX 12 engine
 - [x] A `SpatialTileBuilder` command-line tool that converts procedural
       geometry into the SDK's dataset + tile format (glTF/OBJ import planned)
 

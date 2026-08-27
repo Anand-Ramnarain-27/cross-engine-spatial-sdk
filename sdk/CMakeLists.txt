@@ -116,3 +116,28 @@ else()
         target_compile_options(${SPATIAL_SDK_TARGET} PRIVATE -Werror)
     endif()
 endif()
+
+# Phase 12 (custom engine integration): unlike the Unity/Unreal native
+# plugins, a custom C++ engine built with a matching toolchain links
+# spatial_sdk directly — no C ABI needed (see docs/custom_engine_integration.md).
+# This stages the built static lib (per-config, since it must match the
+# consumer's own Debug/Release CRT linkage) and the public headers into an
+# external project's own third-party layout, e.g.
+# <PhoenixEngine>/Source/3rdParty/SpatialSDK/. Off by default and never
+# baked into a default path, since the target directory is a personal,
+# machine-specific project this repo doesn't own or ship.
+set(SPATIAL_SDK_CUSTOM_ENGINE_STAGE_DIR "" CACHE PATH
+    "If set, copies spatial_sdk's built library and public headers here (e.g. <YourEngine>/Source/3rdParty/SpatialSDK) after each build.")
+if(SPATIAL_SDK_CUSTOM_ENGINE_STAGE_DIR)
+    add_custom_command(TARGET ${SPATIAL_SDK_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${SPATIAL_SDK_CUSTOM_ENGINE_STAGE_DIR}/lib/$<CONFIG>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:${SPATIAL_SDK_TARGET}>"
+            "${SPATIAL_SDK_CUSTOM_ENGINE_STAGE_DIR}/lib/$<CONFIG>/$<TARGET_FILE_NAME:${SPATIAL_SDK_TARGET}>"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/include/spatial"
+            "${SPATIAL_SDK_CUSTOM_ENGINE_STAGE_DIR}/include/spatial"
+        COMMENT "Staging spatial_sdk into ${SPATIAL_SDK_CUSTOM_ENGINE_STAGE_DIR}"
+    )
+endif()

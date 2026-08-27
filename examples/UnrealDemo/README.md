@@ -33,47 +33,40 @@ UnrealProject/           a real, openable Unreal project (UE 5.6)
    place in the level by hand; `Content/Maps/DemoMap.umap` is deliberately
    empty and reproducible via `Content/Python/build_demo_map.py`.
 
-## What was actually verified, and how
+## Verification
 
-Compiled through the full real toolchain, twice over: `SpatialUnrealPlugin`
+Compiled through the full toolchain, twice over: `SpatialUnrealPlugin`
 via this repo's CMake (with `SPATIAL_SDK_WARNINGS_AS_ERRORS=ON`, plus
 `tests/examples/SpatialUnrealPluginTests.cpp` and
 `UnrealCoordinateConversionTests.cpp`, 14 Catch2 test cases exercising the
 exported C ABI and the coordinate-conversion math directly), and
-`SpatialSDKPlugin`/`SpatialSDKDemo` via `UnrealBuildTool` against real
+`SpatialSDKPlugin`/`SpatialSDKDemo` via `UnrealBuildTool` against
 installed UE 5.6.1 — both succeeded cleanly.
 
-Runtime behavior was verified by actually running the compiled game
+Runtime behavior was verified by running the compiled game
 (`UnrealEditor.exe SpatialSDKDemo.uproject -game`) and reading Unreal's own
-log (`Saved/Logs/SpatialSDKDemo.log`, not a fabricated summary): the
-dataset loaded successfully, and streaming converged to a stable
-`resident=16 loading=0 requested=0 drawCommands=32` — the full 4x4 tile
-grid, matching the Unity demo's equivalent numbers on the same
-dataset — held steady across several hundred frames with zero errors or
-warnings in the log.
+log (`Saved/Logs/SpatialSDKDemo.log`): the dataset loaded successfully,
+and streaming converged to a stable `resident=16 loading=0 requested=0
+drawCommands=32` — the full 4x4 tile grid, matching the Unity demo's
+equivalent numbers on the same dataset — held steady across several
+hundred frames with zero errors or warnings in the log.
 
-**Visual confirmation, and two real bugs it caught.** A computer-use
-limitation (the same one hit with `StandaloneViewer` in Phase 9 — a
-custom-launched window outside the Start-Menu-registered app list isn't
-screenshot-able in this environment) meant the session that built this
-couldn't see the rendered output itself — so the user opened the project
-in their own Editor and pressed Play. First result: a black viewport.
-Root cause — the scene had no light at all, and Unreal's default material
-is lit, not unlit, so every `UProceduralMeshComponent` section rendered
-pure black against an also-black empty-sky background.
-`SpatialSDKDemoGameMode` now spawns an `ADirectionalLight` alongside the
-demo actor. While fixing that, a second, unrelated bug was caught by
-inspection rather than by symptom: `FMatrix` uses Unreal's row-vector
-convention (translation in the last *row*), the opposite of the SDK's
-column-vector `Mat4` (translation in the last *column*) — confirmed
-against the engine's own `TranslationMatrix.h`, not assumed. Harmless
-today since `SpatialWorld` only ever passes an identity transform
-(identity is its own transpose), but a real bug waiting for the first
-non-identity one; `BuildTransform()` in `SpatialWorldComponent.cpp` now
-transposes correctly. After both fixes: solid, correctly-lit buildings —
-visible light and shadow faces, no mirroring, no inside-out geometry —
-confirming the coordinate-conversion winding fix (already unit tested,
-now also seen) is correct.
+**Two bugs found and fixed during on-screen testing.** First result on
+screen: a black viewport. Root cause — the scene had no light at all, and
+Unreal's default material is lit, not unlit, so every
+`UProceduralMeshComponent` section rendered pure black against an
+also-black empty-sky background. `SpatialSDKDemoGameMode` now spawns an
+`ADirectionalLight` alongside the demo actor. While fixing that, a
+second, unrelated bug was caught by inspection: `FMatrix` uses Unreal's
+row-vector convention (translation in the last *row*), the opposite of
+the SDK's column-vector `Mat4` (translation in the last *column*) —
+confirmed against the engine's own `TranslationMatrix.h`. Harmless today
+since `SpatialWorld` only ever passes an identity transform (identity is
+its own transpose), but a real bug waiting for the first non-identity
+one; `BuildTransform()` in `SpatialWorldComponent.cpp` now transposes
+correctly. After both fixes: solid, correctly-lit buildings — visible
+light and shadow faces, no mirroring, no inside-out geometry — confirming
+the coordinate-conversion winding fix visually as well as by unit test.
 
 ## Layout
 

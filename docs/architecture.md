@@ -353,13 +353,12 @@ construction now; `SpatialWorld`'s debug draw still prefers a resident
 tile's own (tightest) bounds when available, as defense in depth. See
 [tile_format.md](tile_format.md).
 
-Verified: full pipeline (dataset generation -> real files on disk -> real
-window -> real D3D11 device -> streaming -> upload -> draw) runs cleanly
-end-to-end via `--run-seconds` automated smoke testing, *and* real human
-visual confirmation on screen — including after the `SpatialWorld` refactor,
-where a fresh screenshot (in the README) confirmed identical behavior to
-before the refactor (same final stats: 54 resident tiles, 0 load failures,
-on the same test dataset).
+Verified: the full pipeline (dataset generation, real window, real D3D11
+device, streaming, upload, draw) runs cleanly end-to-end via
+`--run-seconds` automated smoke testing and on-screen visual confirmation.
+After the `SpatialWorld` refactor, a fresh screenshot (in the README)
+confirmed identical behavior to before the refactor — same final stats
+(54 resident tiles, 0 load failures) on the same test dataset.
 
 ## Unity integration (Phase 10)
 
@@ -397,13 +396,11 @@ HLSL one.** `spatial::core::Mat4` is right-handed, Y-up; Unity is
 left-handed, Y-up. Same up axis, opposite handedness — negate Z on every
 position/direction/normal crossing the boundary, and reverse each
 triangle's winding to compensate (mirroring one axis flips front-face
-winding). Both live in exactly one place
-(`CoordinateConversion.cs`), and — learning from Phase 9's D3D11 bug,
-where a convention mismatch compiled fine and only showed up as visibly
-wrong geometry — this one was verified the same way: not just "it
-compiles," but actually entering Play mode in the Unity Editor and
-confirming the rendered buildings are solid and correctly shaded rather
-than mirrored or inside-out.
+winding). Both live in exactly one place (`CoordinateConversion.cs`).
+Convention mismatches like this compile fine and only show up as visibly
+wrong geometry, so this one was verified on screen in the Unity Editor:
+entering Play mode confirmed the rendered buildings are solid and
+correctly shaded, not mirrored or inside-out.
 
 ## Unreal integration (Phase 11)
 
@@ -445,35 +442,87 @@ and is covered by 14 new Catch2 tests; `USpatialWorldComponent` and the
 demo project compiled clean through real `UnrealBuildTool` against
 installed UE 5.6.1; running the compiled game showed streaming actually
 converge (`resident=16 loading=0 requested=0 drawCommands=32`, the full
-dataset, steady across hundreds of frames, zero log errors). A
-computer-use tooling limitation (the same one hit with `StandaloneViewer`
-in Phase 9) meant this session couldn't screenshot the rendered window
-itself, so the user opened the project and pressed Play — first result: a
-black viewport, because the scene had no light source at all and
-Unreal's default material is lit, not unlit. `SpatialSDKDemoGameMode` now
-spawns an `ADirectionalLight`. Fixing that surfaced a second, unrelated
-bug caught by inspection rather than symptom: `FMatrix` uses Unreal's
-row-vector convention (translation in the last row) — the opposite of the
-SDK's column-vector `Mat4` (translation in the last column), confirmed
-against the engine's own `TranslationMatrix.h` — so `BuildTransform()` was
-silently transposing (invisible today, since `SpatialWorld` only ever
-passes an identity transform; identity is its own transpose). Both fixed,
-the user's next screenshot showed solid, correctly-lit buildings with
-real light/shadow faces — visual confirmation, not just a unit test, that
-the coordinate-conversion winding fix is actually correct. See
-`examples/UnrealDemo/README.md`'s "What was actually verified" section for
-the full accounting.
+dataset, steady across hundreds of frames, zero log errors).
+
+Two bugs turned up during on-screen testing: (1) the scene had no light
+source at all, and Unreal's default material is lit, not unlit, so
+everything rendered as a black viewport — `SpatialSDKDemoGameMode` now
+spawns an `ADirectionalLight`; (2) while fixing that, a second, unrelated
+bug was caught by inspection: `FMatrix` uses Unreal's row-vector
+convention (translation in the last row) — the opposite of the SDK's
+column-vector `Mat4` (translation in the last column), confirmed against
+the engine's own `TranslationMatrix.h` — so `BuildTransform()` was
+silently transposing (invisible until a non-identity transform is ever
+passed, since identity is its own transpose). After both fixes, the
+rendered buildings are solid and correctly lit with real light/shadow
+faces — visual confirmation, not just a unit test, that the
+coordinate-conversion winding fix is correct. See
+`examples/UnrealDemo/README.md` for the full verification writeup.
+
+## Custom engine integration (Phase 12)
+
+Validated against an independent custom engine — a DirectX 12
+GameObject/Component engine with a full ImGui editor, not built for this
+integration. The integration itself lives in that engine's own
+repository (`ComponentSpatialWorld`, `PhoenixSpatialRenderer`, and a
+handful of engine-file edits); `docs/custom_engine_integration.md`
+documents the pattern and the result.
+
+Two decisions define this phase:
+
+1. **Direct C++ linkage, not a third C ABI.** Unlike Unity (forced into
+   one by P/Invoke) and Unreal (chosen because of a real, checked
+   toolset-mismatch risk — see the Unreal section above), a custom
+   engine built with the *same* toolchain as this repo's own CMake build
+   doesn't need one. This was confirmed by comparing the target engine's
+   `.vcxproj` settings (v143/C++20, `/MD` Release / `/MDd` Debug)
+   directly against this repo's own CMake output — a match. Had it not
+   matched, a C ABI would have been the right call here too, for the
+   same reason it was for Unreal.
+2. **Zero coordinate conversion.** The target engine's math library
+   (DirectXTK SimpleMath) is right-handed/Y-up with the same
+   CCW-front-face convention `spatial::core::Mat4` and the SDK's
+   procedural mesh generator already use. This is the payoff of choosing
+   that convention for `Mat4` in Phase 2 rather than defaulting to
+   whatever DirectX examples typically use (left-handed) —
+   `PhoenixSpatialRenderer` is consequently the simplest of the three
+   `IRenderer` implementations, constructing the engine's own
+   `Mesh`/`Material` objects directly with no CPU-buffer intermediate
+   step.
+
+Tracing the engine's actual render path (rather than trusting
+`Component::render()`'s signature at face value) turned up a real
+architectural finding: that virtual is dead code in this engine (empty
+in `ComponentMesh`, unreachable outside prefab editing in the only call
+site). The live path is a per-frame gather step
+(`EditorRenderer.cpp`'s `collectMeshes`) that walks the scene reading
+each component's exposed geometry — `ComponentSpatialWorld` plugs into
+that exact pattern (`buildMeshEntries()`, mirroring
+`Model::buildMeshEntries()`) rather than adding a parallel rendering
+path the engine wouldn't actually invoke.
+
+Verified by running the built engine and reading a file-based log (the
+engine's own logging writes via `OutputDebugStringA`, which needs an
+attached debugger — this integration adds its own file logger instead):
+streaming converges to `resident=16 loading=0 requested=0
+drawCommands=32` — the same numbers, on the same generated dataset, as
+the Unity and Unreal demos, held steady for the full session with zero
+errors — and matched the rendered result on screen: solid, correctly
+shaded geometry inside the debug tile-bounds overlay, confirming the
+zero-conversion assumption held.
 
 ## Status
 
 This document will be extended as each phase lands. Current state: Phase
-11 (Unreal native plugin + `USpatialWorldComponent`, compiled and run
-against real UE 5.6.1) complete, on top of Phase 10 (Unity native plugin +
-C# integration, verified live in the Unity Editor), Phase 9 (standalone
-viewer, D3D11 backend, `SpatialWorld` public API façade, full
-Streaming+LOD+Rendering+Debug wiring, real per-dataset height bounds), and
-Phases 4–8. 181 automated SDK tests (the viewer and both engine demos are
+12 (custom-engine integration, direct C++ linkage, validated against a
+real DirectX 12 engine) complete, on top of Phase 11 (Unreal native
+plugin + `USpatialWorldComponent`, compiled and run against real UE
+5.6.1), Phase 10 (Unity native plugin + C# integration, verified live in
+the Unity Editor), Phase 9 (standalone viewer, D3D11 backend,
+`SpatialWorld` public API façade, full Streaming+LOD+Rendering+Debug
+wiring, real per-dataset height bounds), and Phases 4–8. 181 automated
+SDK tests (the viewer and all three engine integrations are
 GPU/Editor-dependent and aren't part of that suite — see
 [rendering.md](rendering.md) for why platform backends are verified by
-actually running them instead). No custom-engine integration or profiling
-tooling exists yet.
+actually running them instead). No profiling tooling (Phase 13) or final
+portfolio polish (Phase 14) exists yet.

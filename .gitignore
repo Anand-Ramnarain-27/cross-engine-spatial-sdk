@@ -25,6 +25,9 @@ _deps/
 # JetBrains (CLion / Rider)
 .idea/
 
+# Editor/tooling local state
+.claude/
+
 # Unity
 examples/UnityDemo/UnityProject/Library/
 examples/UnityDemo/UnityProject/Temp/

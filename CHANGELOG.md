@@ -5,139 +5,159 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 12: Custom Engine Integration
+
+- `sdk/CMakeLists.txt` — `SPATIAL_SDK_CUSTOM_ENGINE_STAGE_DIR`, an
+  opt-in cache variable (unset by default) that copies the built static
+  library and public headers into an external project's own third-party
+  layout after each build — the same role the Unity/Unreal native
+  plugins' staging steps play, for a consuming project outside this
+  repository.
+- Validated against an independent custom engine — a DirectX 12 engine
+  with a GameObject/Component architecture and a full ImGui editor, not
+  built for this integration. The integration itself
+  (`ComponentSpatialWorld`, `PhoenixSpatialRenderer`, and a handful of
+  engine-file edits — the component type enum, the component factory,
+  one line in the mesh-gather step, include/lib paths) lives in that
+  engine's own repository; `docs/custom_engine_integration.md` documents
+  the pattern and the result.
+- **Direct C++ linkage, not a C ABI** — the contrast with both engine
+  plugins, made possible because the consuming engine's MSVC toolset,
+  per-config CRT linkage, and C++ standard match this repo's own CMake
+  build exactly.
+- **Zero coordinate conversion** — the target engine's math library is
+  right-handed/Y-up with the same CCW-front-face convention the SDK's
+  procedural mesh generator produces, matching the convention
+  `spatial::core::Mat4` was given in Phase 2, so positions, normals, and
+  winding cross the boundary unmodified. `PhoenixSpatialRenderer` is
+  consequently the simplest of the three `IRenderer` implementations:
+  `createMesh()`/`createMaterial()` construct the engine's own
+  `Mesh`/`Material` objects directly, no CPU-buffer pull step.
+- The engine's `Component::render()` virtual turned out to be dead code
+  (empty in `ComponentMesh`, its only call site unreachable outside
+  prefab editing) — the real render path is a per-frame gather step that
+  `ComponentSpatialWorld::buildMeshEntries()` plugs into the same way the
+  engine's own procedural-model path already does, rather than adding a
+  parallel rendering path.
+- Runtime-verified by running the built engine and reading a file-based
+  log (the engine's built-in logging writes via `OutputDebugStringA`,
+  which needs an attached debugger — a small file logger was added
+  instead): streaming converges to `resident=16 loading=0 requested=0
+  drawCommands=32`, the same numbers as the Unity and Unreal demos on the
+  same dataset, and matched what was rendered on screen — solid,
+  correctly shaded geometry within the debug tile-bounds overlay.
+
 ### Added — Phase 11: Unreal Integration
 
 - `examples/UnrealDemo/NativePlugin` — a second, independent C++ CMake
   target (`SpatialUnrealPlugin.dll`) wrapping `spatial::SpatialWorld`
   behind its own flat C ABI (`SpatialUnrealPlugin.h/.cpp`) — not shared
-  with `SpatialUnityPlugin.dll`, deliberately: real cross-engine SDKs ship
-  a plugin binary per engine, matching this project's own architecture
-  diagram. Unlike Unity (forced into a C ABI by P/Invoke), Unreal plugins
-  are C++-native, so direct linkage of `spatial_sdk.lib` was the first
-  option considered and rejected: Unreal pins its own MSVC toolset/CRT
-  settings per engine release with no guarantee they match this repo's own
-  CMake build, and a mismatch there is silent heap corruption at a C++
-  ABI boundary, not a compile error. `examples/common/ManagedMeshRenderer`
-  (moved out of `examples/UnityDemo/NativePlugin` — genuinely
-  engine-agnostic, so now shared by both plugins) is the `IRenderer`
-  behind it, same "managed mesh bridge" scope call as Unity's
-  `Graphics.DrawMesh`, here backing `UProceduralMeshComponent`.
-- `UnrealCoordinateConversion.h` — right-handed/Y-up/meters (the SDK) <->
+  with `SpatialUnityPlugin.dll`: real cross-engine SDKs ship a plugin
+  binary per engine, matching this project's own architecture diagram.
+  Unreal plugins are C++-native, but Unreal pins its own MSVC
+  toolset/CRT settings per engine release with no guarantee they match
+  this repo's own CMake build, and a mismatch there is silent heap
+  corruption at a C++ ABI boundary rather than a compile error — hence a
+  C ABI here too. `examples/common/ManagedMeshRenderer` (shared with the
+  Unity plugin, since it's genuinely engine-agnostic) is the `IRenderer`
+  behind it, backing `UProceduralMeshComponent`.
+- `UnrealCoordinateConversion.h` — right-handed/Y-up/meters (the SDK) to
   Unreal's left-handed/Z-up/centimeters: a bigger mismatch than Unity's
-  (an axis swap plus 100x scale, not just a sign flip). Unlike Unity
-  (where the equivalent conversion lives in C#), this lives natively in
-  `SpatialUnrealPlugin.cpp` — every exported function hands back
-  Unreal-space-ready data, so `USpatialWorldComponent` does zero
-  conversion math of its own. That's what makes the conversion provable by
-  this repo's own Catch2 suite
-  (`tests/examples/UnrealCoordinateConversionTests.cpp`,
-  `SpatialUnrealPluginTests.cpp`) instead of only by looking at the
-  screen — the same category of bug as Phase 9's HLSL row-major/`mul()`
-  mismatch, given the same treatment.
-- `UnrealProject/Plugins/SpatialSDKPlugin` — `USpatialWorldComponent` (the
-  brief's suggested class name exactly), linked against the native plugin
-  as a prebuilt ThirdParty binary. Compiled clean via real
-  `UnrealBuildTool` against installed UE 5.6.1, `/W4`-clean C++ on the
-  native side. `SpatialSDKDemoGameMode`/`Pawn`/`Actor` spawn the demo
-  entirely in code (no hand-placed level content) specifically so running
-  it doesn't depend on GUI interaction that wasn't reliably available in
-  this environment — see below.
-- **Runtime-verified by actually running the compiled game and reading
-  Unreal's own log**, not just by compiling: streaming converges to
-  `resident=16 loading=0 requested=0 drawCommands=32` (the full 4x4 tile
-  grid) and holds steady across hundreds of frames with zero errors.
-- **Two real bugs found and fixed via the user's own screenshot** (a
-  computer-use limitation — the same one hit with `StandaloneViewer` in
-  Phase 9 — meant this session couldn't see the rendered window itself, so
-  the user opened the project and pressed Play): (1) the scene had no
-  light at all, so every `UProceduralMeshComponent` section rendered pure
-  black against an equally black empty-sky background —
-  `SpatialSDKDemoGameMode` now spawns an `ADirectionalLight`; (2) caught by
-  inspection while fixing (1), not by symptom — `FMatrix` uses Unreal's
-  row-vector convention (translation in the last row), the opposite of the
-  SDK's column-vector `Mat4` (translation in the last column), confirmed
-  against the engine's own `TranslationMatrix.h` rather than assumed.
-  Harmless today since `SpatialWorld` only ever passes an identity
-  transform, but a real bug waiting for the first non-identity one;
-  `BuildTransform()` now transposes correctly. After both fixes: solid,
-  correctly-lit buildings with visible light/shadow faces, confirming the
-  coordinate-conversion winding fix visually, not just by unit test.
-- 14 new automated SDK tests (6 exercising the `SpatialUnreal_*` C ABI end
-  to end, 8 pure conversion-math tests), 181 total (up from 167
-  pre-Phase-11), all green, including a full
-  `SPATIAL_SDK_WARNINGS_AS_ERRORS=ON` rebuild.
+  (an axis swap plus 100x scale, not just a sign flip). This conversion
+  lives natively in `SpatialUnrealPlugin.cpp` — every exported function
+  hands back Unreal-space-ready data, so `USpatialWorldComponent` does no
+  conversion math of its own, and the conversion is covered directly by
+  this repo's Catch2 suite (`tests/examples/UnrealCoordinateConversionTests.cpp`,
+  `SpatialUnrealPluginTests.cpp`).
+- `UnrealProject/Plugins/SpatialSDKPlugin` — `USpatialWorldComponent`,
+  linked against the native plugin as a prebuilt ThirdParty binary.
+  Compiles clean via `UnrealBuildTool` against UE 5.6.1, `/W4`-clean on
+  the native side. `SpatialSDKDemoGameMode`/`Pawn`/`Actor` spawn the demo
+  entirely in code, so running it needs no hand-placed level content.
+- Runtime-verified by running the compiled game and reading Unreal's own
+  log: streaming converges to `resident=16 loading=0 requested=0
+  drawCommands=32` (the full 4x4 tile grid) and holds steady across
+  hundreds of frames with zero errors.
+- Two bugs were found and fixed during testing: (1) the scene had no
+  light source, so every `UProceduralMeshComponent` section rendered
+  pure black against an equally black background —
+  `SpatialSDKDemoGameMode` now spawns an `ADirectionalLight`; (2)
+  `FMatrix` uses Unreal's row-vector convention (translation in the last
+  row), the opposite of the SDK's column-vector `Mat4` (translation in
+  the last column) — harmless while `SpatialWorld` only ever passes an
+  identity transform, but a real bug waiting for the first non-identity
+  one; `BuildTransform()` now transposes correctly. After both fixes:
+  solid, correctly-lit buildings with visible light/shadow faces,
+  confirming the coordinate-conversion winding fix visually as well as
+  by unit test.
+- 14 new automated SDK tests (6 exercising the `SpatialUnreal_*` C ABI
+  end to end, 8 pure conversion-math tests), 181 total (up from 167),
+  all green, including a full `SPATIAL_SDK_WARNINGS_AS_ERRORS=ON`
+  rebuild.
 
 ### Added — Phase 10: Unity Integration
 
 - `examples/UnityDemo/NativePlugin` — a C++ CMake target
-  (`SpatialUnityPlugin.dll`) wrapping `spatial::SpatialWorld` behind a flat
-  C ABI (`SpatialUnityPlugin.h/.cpp`), since Unity's P/Invoke marshaler can
-  only cross into C++ through free functions and fixed-layout structs, not
-  class members. `ManagedMeshRenderer` is the `IRenderer` implementation
-  behind it — a scope decision, not a shortcut: rather than a native
-  Unity graphics-API plugin (`IUnityGraphicsD3D11`/`GL.IssuePluginEvent`,
-  a genuinely separate project and pipeline-specific), it records CPU-side
+  (`SpatialUnityPlugin.dll`) wrapping `spatial::SpatialWorld` behind a
+  flat C ABI (`SpatialUnityPlugin.h/.cpp`), since Unity's P/Invoke
+  marshaler can only cross into C++ through free functions and
+  fixed-layout structs, not class members. `ManagedMeshRenderer` is the
+  `IRenderer` implementation behind it: rather than a native Unity
+  graphics-API plugin (`IUnityGraphicsD3D11`/`GL.IssuePluginEvent`, a
+  separate, pipeline-specific project), it records CPU-side
   mesh/material/draw-command data that Unity pulls once per frame and
   turns into real `UnityEngine.Mesh` objects drawn with
-  `Graphics.DrawMesh` — see `docs/unity_integration.md` for the full
-  rationale.
+  `Graphics.DrawMesh` — see `docs/unity_integration.md`.
 - `UnityProject/Assets/SpatialSDK/Scripts/` — `SpatialWorldNative.cs`
-  ([DllImport] bindings, kept in sync with the C header by hand),
-  `CoordinateConversion.cs` (the one place the SDK's right-handed/Unity's
-  left-handed convention is handled — Z-negation plus reversed triangle
-  winding, the same category of bug as Phase 9's HLSL row-major/`mul()`
-  mismatch), and `SpatialWorldComponent.cs` — the `MonoBehaviour` an
-  integration adds to a `GameObject`, exposing dataset path, streaming
-  config, debug/statistics toggles, and material as Inspector fields, with
-  no core SDK logic of its own.
+  (`[DllImport]` bindings kept in sync with the C header by hand),
+  `CoordinateConversion.cs` (right-handed SDK to left-handed Unity: Z
+  negation plus reversed triangle winding), and `SpatialWorldComponent.cs`
+  — the `MonoBehaviour` an integration adds to a `GameObject`, exposing
+  dataset path, streaming config, debug/statistics toggles, and material
+  as Inspector fields, with no core SDK logic of its own.
 - A real, openable Unity project (`UnityProject/`, Unity 6000.5.9f1) with
   a generated demo dataset and `Assets/Scenes/SpatialSDKDemo.unity`
   (reproducible via the `Spatial SDK > Rebuild Demo Scene` Editor menu
-  command). **Verified live in the Unity Editor, not just by compiling**:
-  entered Play mode, watched the dataset stream to 16/16 tiles resident,
-  and confirmed the rendered buildings are solid and correctly shaded
-  (proving the coordinate-conversion winding fix is actually correct, not
-  mirrored/inside-out) — the same standard of verification Phase 9 set
-  for `StandaloneViewer`, applied here via the Unity Editor instead of a
-  standalone window. Zero console errors or warnings.
+  command). Verified live in the Unity Editor: entering Play mode
+  streams the dataset to 16/16 tiles resident, with the rendered
+  buildings solid and correctly shaded — confirming the
+  coordinate-conversion winding fix — and zero console errors or
+  warnings.
 - `tests/examples/SpatialUnityPluginTests.cpp` — 6 new test cases
-  exercising the actual exported `SpatialUnity_*` C functions (not just
-  the C++ classes behind them), since struct layout, caller-allocated
-  output buffers, and unknown-id handling are exactly what a C++-only test
-  would miss. 167 automated SDK tests total (up from 161).
+  exercising the exported `SpatialUnity_*` C functions directly (not
+  just the C++ classes behind them), covering struct layout,
+  caller-allocated output buffers, and unknown-id handling. 167
+  automated SDK tests total (up from 161).
 
 ### Added — post-Phase-9 polish: `SpatialWorld` API façade and fixes
 
 - `spatial::SpatialWorld` (`sdk/include/spatial/SpatialWorld.h`) — the
-  public API façade every engine integration is meant to build on:
+  public API façade every engine integration builds on:
   `loadDataset()`/`update()`/`render()`/`shutdown()`. Consolidates the
   `StreamingManager`+`LODManager`+`GPUUploadQueue`+`DebugRenderer`+
   per-tile-GPU-tracking wiring that used to live directly in
   `examples/StandaloneViewer/src/main.cpp` — that file now just calls
-  `SpatialWorld`'s four methods. Documented in `docs/sdk_api.md` (filled in
-  for the first time) and `docs/architecture.md`.
+  `SpatialWorld`'s four methods. Documented in `docs/sdk_api.md` and
+  `docs/architecture.md`.
 - `DatasetManifest` gained real `worldHeightMin`/`worldHeightMax` fields
   (optional in the JSON manifest — an older manifest without them still
   gets the previous generic `[-1000, 1000]` range). `SpatialTileBuilder`
-  now writes the actual height range it generates. This fixes, at the
-  root, the bug the Phase 9 debug-wireframe fix had only worked around:
-  `TileIndex`'s bounds are now accurate by construction, not just a
-  per-call fallback.
-- `FlyCamera` (previously untested — the only math-heavy piece in the
-  project without coverage) now has 9 unit tests: direction vectors,
-  mouse-look sign convention and pitch clamping, movement along each local
-  axis, view-matrix correctness, and `CameraParams` conversion.
-- Two real use-after-free bugs found and fixed while building this,
-  documented in `docs/architecture.md` and `docs/sdk_api.md`: (1) GPU
-  upload callbacks capturing a reference to a tile's GPU record that could
-  be evicted before the upload completes — fixed with deferred erasure;
-  (2) `SpatialWorld` declared *before* its `IRenderer` in both `main.cpp`
-  and (independently, caught the same way — a SIGSEGV at scope exit) in
-  the new test suite, meaning the renderer could be destroyed before the
-  GPU resources pointing into it. Both are now called out inline
-  everywhere the pattern recurs, not just fixed silently.
-- A real screenshot in the README, taken by actually running the viewer
-  against a 1,024-tile generated dataset.
+  now writes the actual height range it generates, fixing at the root
+  the bug the Phase 9 debug-wireframe fix had only worked around:
+  `TileIndex`'s bounds are now accurate by construction.
+- `FlyCamera` (previously untested) now has 9 unit tests: direction
+  vectors, mouse-look sign convention and pitch clamping, movement along
+  each local axis, view-matrix correctness, and `CameraParams`
+  conversion.
+- Two use-after-free bugs were found and fixed while building this: (1)
+  GPU upload callbacks capturing a reference to a tile's GPU record that
+  could be evicted before the upload completes, fixed with deferred
+  erasure; (2) `SpatialWorld` declared before its `IRenderer` in both
+  `main.cpp` and, independently, in the test suite, meaning the renderer
+  could be destroyed before the GPU resources pointing into it — both
+  documented inline everywhere the pattern recurs.
+- A real screenshot in the README, from the viewer running against a
+  1,024-tile generated dataset.
 - 161 automated SDK tests total (up from 143), all green, stable across
   repeated runs, including with `SPATIAL_SDK_WARNINGS_AS_ERRORS=ON`.
 
@@ -150,37 +170,33 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   and a `main.cpp` that wires `StreamingManager`, `LODManager<TileId>`,
   `GPUUploadQueue`, and `DebugRenderer` together against a real dataset.
 - `assets/shaders/Mesh.hlsl` and `DebugLine.hlsl` — both declared
-  `row_major` and using `mul(matrix, vector)` to exactly match `Mat4`'s
-  row-major/column-vector convention (getting this wrong silently
-  transposes every transform rather than erroring, so it's called out in
-  both the shader source and `docs/rendering.md`).
+  `row_major` and using `mul(matrix, vector)` to match `Mat4`'s
+  row-major/column-vector convention exactly (getting this wrong
+  silently transposes every transform rather than erroring — called out
+  in both the shader source and `docs/rendering.md`).
 - CLI: `--dataset`, `--tiles`, `--assets`, `--width`/`--height`,
   `--streaming-radius`, `--max-resident-tiles`, `--cpu-budget-mb`,
   `--worker-threads`, `--run-seconds` (auto-exit, used for automated
   smoke testing). Controls: WASD move, Space/Ctrl up/down, hold right
   mouse button to look, F1 toggles the debug tile-bounds overlay, Esc quits.
-- Fixed a real bug found while wiring this up: GPU upload callbacks capture
-  a reference to their tile's per-frame GPU record, but a tile can be
-  evicted (erasing that record) before its upload finishes — `main.cpp`
-  now defers erasure until every in-flight upload for a tile has completed,
-  rather than erasing as soon as the tile stops being desired.
-- Fixed a second bug found via actual visual testing: the debug tile-bounds
-  wireframe used `TileIndex`'s bounds, whose Y range comes from
-  `DatasetManifest::worldBounds()`'s generic `[-1000, 1000]` placeholder
-  (there's no real per-dataset height field yet — see `docs/tile_format.md`),
-  making every wireframe box 2000 units tall instead of hugging its tile.
-  `main.cpp` now prefers a resident tile's own (tightly-bounded) `bounds()`
-  for the debug draw, falling back to `TileIndex` only for tiles that
-  aren't loaded yet.
+- Fixed: GPU upload callbacks capture a reference to their tile's
+  per-frame GPU record, but a tile can be evicted (erasing that record)
+  before its upload finishes — `main.cpp` now defers erasure until every
+  in-flight upload for a tile has completed.
+- Fixed: the debug tile-bounds wireframe used `TileIndex`'s bounds,
+  whose Y range comes from `DatasetManifest::worldBounds()`'s generic
+  `[-1000, 1000]` placeholder (no real per-dataset height field existed
+  yet — see `docs/tile_format.md`), making every wireframe box 2000
+  units tall instead of hugging its tile. `main.cpp` now prefers a
+  resident tile's own tightly-bounded `bounds()` for the debug draw,
+  falling back to `TileIndex` only for tiles not yet loaded.
 - Verified end-to-end via automated `--run-seconds` smoke testing (real
   dataset generated by `SpatialTileBuilder`, real window, real D3D11
-  device, zero load failures, clean exit), CLI error-path testing (missing
-  `--dataset`, nonexistent dataset path, `--help`), **and** real human
-  visual verification — the rendered city (shaded ground/buildings) and
-  the color-coded debug wireframe were both confirmed correct on screen,
-  which is how the wireframe bug above was actually caught. Full build,
-  including the viewer, passes with `SPATIAL_SDK_WARNINGS_AS_ERRORS=ON`
-  and zero warnings.
+  device, zero load failures, clean exit), CLI error-path testing
+  (missing `--dataset`, nonexistent dataset path, `--help`), and visual
+  verification of the rendered city and color-coded debug wireframe.
+  Full build, including the viewer, passes with
+  `SPATIAL_SDK_WARNINGS_AS_ERRORS=ON` and zero warnings.
 
 ### Added — Phase 8: Rendering
 
@@ -199,7 +215,7 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   pass-through it's been since Phase 6.
 - `spatial::debug::DebugRenderer` and `colorForState()` — batches tile
   bounding-box wireframes into one `drawDebugLines` call per flush,
-  color-coded exactly per the project brief's legend (green/yellow/red/gray).
+  color-coded per the project's state legend (green/yellow/red/gray).
 - `MockRenderer` (`tests/rendering/MockRenderer.h`) — a recording `IRenderer`
   test double used across the rendering and debug test suites.
 - 23 new Catch2 test cases, including an end-to-end test that pulls a
@@ -207,7 +223,7 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   meshes through `GPUUploadQueue` — proving Streaming and Rendering compose
   correctly despite neither depending on the other.
 - Full design write-up, including why `StreamingManager` deliberately does
-  *not* depend on `IRenderer` yet, in `docs/rendering.md` (new).
+  not depend on `IRenderer` yet, in `docs/rendering.md` (new).
 
 ### Added — Phase 7: Cache and Memory Budget
 
@@ -231,9 +247,8 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   budget-driven eviction under a sweeping-camera scenario. One pre-existing
   Phase 6 test (immediate-unload-on-leaving-radius) was rewritten — that
   behavior is intentionally gone as of this phase.
-- Full design write-up (including why one formula replaces the brief's
-  separate LRU/distance/priority/combined eviction options) in
-  `docs/streaming.md`.
+- Full design write-up (including why one formula replaces separate
+  LRU/distance/priority/combined eviction options) in `docs/streaming.md`.
 
 ### Added — Phase 6: Streaming (core milestone)
 
@@ -267,8 +282,8 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 - `spatial::lod::selectLODByDistance` and `computeScreenSpaceError`/
   `screenSpaceErrorCrossoverDistance` — the latter lets screen-space-error
-  LOD selection reuse the exact same distance-threshold algorithm as
-  distance-mode selection (see `docs/lod.md` for why).
+  LOD selection reuse the same distance-threshold algorithm as
+  distance-mode selection (see `docs/lod.md`).
 - `LODManager<Key>` — stateful, hysteresis-aware LOD selection keyed by an
   opaque hashable key (`TileId` in practice), templated so `spatial::lod`
   stays dependency-free of the tile model, matching the pattern already
