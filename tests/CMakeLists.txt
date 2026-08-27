@@ -41,6 +41,7 @@ set(SPATIAL_SDK_TEST_SOURCES
     rendering/GPUUploadQueueTests.cpp
     rendering/StreamingRenderingIntegrationTests.cpp
     debug/DebugRendererTests.cpp
+    debug/ProfilerTests.cpp
     SpatialWorldTests.cpp
     examples/FlyCameraTests.cpp
     examples/SpatialUnityPluginTests.cpp

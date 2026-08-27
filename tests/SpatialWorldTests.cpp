@@ -158,6 +158,38 @@ TEST_CASE("SpatialWorld streams tiles resident and draws them", "[spatialworld]"
     CHECK(renderer.meshesCreated > 0);
 }
 
+TEST_CASE("SpatialWorld::frameProfile reflects update()+render() activity", "[spatialworld]")
+{
+    const auto manifestPath = writeTestDataset("spatial_world_test_profile");
+
+    MockRenderer renderer; // must outlive world — see the note earlier in this file
+    SpatialWorld world;
+
+    SpatialWorldConfig config{};
+    config.streaming.streamingRadius = 1000.0f;
+    REQUIRE(world.loadDataset(manifestPath, config).hasValue());
+
+    CameraParams camera{};
+    camera.position = Vec3{0, 0, 0};
+
+    // Before any update()/render() call, the profile is zero-initialized.
+    CHECK(world.frameProfile().totalMs == 0.0);
+
+    REQUIRE(waitUntil([&] {
+        world.update(camera, renderer);
+        return world.statistics().residentCount == 4;
+    }));
+    drainUploads(world, camera, renderer);
+    world.render(renderer, camera);
+
+    const spatial::debug::FrameProfile& profile = world.frameProfile();
+    CHECK(profile.totalMs >= 0.0);
+    // LOD selection ran for the 4 resident tiles this render() call.
+    CHECK(profile.section(spatial::debug::ProfileSection::LODSelection) >= 0.0);
+    // Debug visualization defaults on, so the debug-draw section also ran.
+    CHECK(profile.section(spatial::debug::ProfileSection::DebugDraw) >= 0.0);
+}
+
 TEST_CASE("SpatialWorld draws the debug overlay only when enabled", "[spatialworld]")
 {
     const auto manifestPath = writeTestDataset("spatial_world_test_debug");

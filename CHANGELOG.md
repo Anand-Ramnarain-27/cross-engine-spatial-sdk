@@ -5,6 +5,41 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added — Phase 13: Profiling Tooling
+
+- `spatial::debug::Profiler` (`sdk/include/spatial/debug/Profiler.h`) —
+  always-on CPU frame timing built directly into `SpatialWorld`, placed in
+  the Debug module alongside `DebugRenderer` per the module map
+  `docs/architecture.md` laid out from Phase 1. A fixed `ProfileSection`
+  enum (`StreamingUpdate`, `GPUUpload`, `LODSelection`, `DebugDraw`) rather
+  than a general-purpose named-section system, matching the project's
+  preference for concrete code over speculative generality.
+- RAII `Profiler::ScopedSection` timer (`std::chrono::steady_clock`) —
+  `measure(section)` returns a scope guard that adds its elapsed time to
+  the current frame on destruction, so a section's cost is tied to a
+  lexical scope rather than to matched manual start/stop calls that could
+  be skipped on an early return.
+- `SpatialWorld::update()`/`render()` instrumented end to end: streaming
+  update and GPU upload drain are measured in `update()`; per-tile LOD
+  selection and the debug-overlay draw are measured in `render()`, on
+  every exit path (including the "no dataset loaded" and "debug
+  visualization disabled" early returns) so a completed frame's profile is
+  always internally consistent.
+- `SpatialWorld::frameProfile()` — read-only accessor for the most
+  recently completed frame's `FrameProfile`, zero-initialized before the
+  first `update()`/`render()` call.
+- `StandaloneViewer --profile-csv <path>` — writes one CSV row per frame
+  (per-section milliseconds plus resident/loading/requested tile counts)
+  and shows a live per-section breakdown in the window title bar. Run
+  against the 1024-tile `BigCity` dataset: an initial-load spike in
+  `StreamingUpdate`/`DebugDraw` at frame 0, `GPUUpload`-dominated frames
+  while meshes upload, then convergence to roughly 1-2ms/frame dominated
+  by `LODSelection` once streaming settles (`loadingTiles == 0`,
+  `requestedTiles == 0`) — see `docs/profiling.md`.
+- `tests/debug/ProfilerTests.cpp` (5 cases) and a `SpatialWorldTests.cpp`
+  case covering `frameProfile()` through a real `update()`+`render()`
+  cycle.
+
 ### Added — Phase 12: Custom Engine Integration
 
 - `sdk/CMakeLists.txt` — `SPATIAL_SDK_CUSTOM_ENGINE_STAGE_DIR`, an

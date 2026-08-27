@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -41,6 +42,7 @@ namespace
         std::uint32_t cpuBudgetMB = 512;
         std::uint32_t workerThreads = 4;
         float runSeconds = 0.0f; // 0 = run until window closed
+        std::filesystem::path profileCsv; // empty = disabled; see docs/profiling.md
     };
 
     void printUsage()
@@ -59,6 +61,7 @@ namespace
             "  --cpu-budget-mb <n>         (default: 512)\n"
             "  --worker-threads <n>        (default: 4)\n"
             "  --run-seconds <s>           Auto-exit after s seconds (for automated smoke tests)\n"
+            "  --profile-csv <path>        Write one CPU-timing row per frame (see docs/profiling.md)\n"
             "  --help                      Show this message\n\n"
             "Controls: WASD move, Space/Ctrl up/down, hold right mouse button to look,\n"
             "F1 toggles debug tile-bounds visualization, Esc quits.\n";
@@ -174,6 +177,12 @@ namespace
                 if (!parsed) { std::cerr << "Invalid value for --run-seconds\n"; return std::nullopt; }
                 options.runSeconds = *parsed;
             }
+            else if (arg == "--profile-csv")
+            {
+                const auto v = next(i);
+                if (!v) { std::cerr << "Missing value for --profile-csv\n"; return std::nullopt; }
+                options.profileCsv = *v;
+            }
             else
             {
                 std::cerr << "Unrecognized argument: " << arg << "\n";
@@ -253,6 +262,20 @@ int main(int argc, char** argv)
 
         constexpr float kFovYRadians = 1.0471975512f; // 60 degrees
 
+        std::ofstream profileCsv;
+        std::uint64_t profileFrameIndex = 0;
+        if (!options.profileCsv.empty())
+        {
+            profileCsv.open(options.profileCsv);
+            if (!profileCsv)
+            {
+                std::cerr << "Failed to open --profile-csv path: " << options.profileCsv << "\n";
+                return 1;
+            }
+            profileCsv << "frame,elapsedSeconds,streamingUpdateMs,gpuUploadMs,lodSelectionMs,debugDrawMs,totalMs,"
+                          "residentTiles,loadingTiles,requestedTiles\n";
+        }
+
         const auto startTime = std::chrono::steady_clock::now();
         auto lastFrameTime = startTime;
         auto lastStatsPrint = startTime;
@@ -305,17 +328,38 @@ int main(int argc, char** argv)
             renderer.endFrame();
             renderer.present();
 
+            const debug::FrameProfile& profile = world.frameProfile();
+            if (profileCsv)
+            {
+                profileCsv << profileFrameIndex << ','
+                           << std::chrono::duration<float>(now - startTime).count() << ','
+                           << profile.section(debug::ProfileSection::StreamingUpdate) << ','
+                           << profile.section(debug::ProfileSection::GPUUpload) << ','
+                           << profile.section(debug::ProfileSection::LODSelection) << ','
+                           << profile.section(debug::ProfileSection::DebugDraw) << ','
+                           << profile.totalMs << ','
+                           << world.statistics().residentCount << ','
+                           << world.statistics().loadingCount << ','
+                           << world.statistics().requestedCount << '\n';
+            }
+            ++profileFrameIndex;
+
             if (now - lastStatsPrint > std::chrono::seconds(1))
             {
                 lastStatsPrint = now;
                 const StreamingStatistics stats = world.statistics();
-                wchar_t title[256];
+                wchar_t title[320];
                 swprintf_s(
                     title,
-                    L"Spatial SDK Viewer - %hs - Resident %zu | Loading %zu | Requested %zu | CPU %.1f MB | Hits %llu",
+                    L"Spatial SDK Viewer - %hs - Resident %zu | Loading %zu | Requested %zu | CPU %.1f MB | Hits %llu | Frame %.2fms (Stream %.2f/Upload %.2f/LOD %.2f/Debug %.2f)",
                     world.datasetManifest().name.c_str(), stats.residentCount, stats.loadingCount, stats.requestedCount,
                     static_cast<double>(stats.cpuMemoryUsedBytes) / (1024.0 * 1024.0),
-                    static_cast<unsigned long long>(stats.totalCacheHits));
+                    static_cast<unsigned long long>(stats.totalCacheHits),
+                    profile.totalMs,
+                    profile.section(debug::ProfileSection::StreamingUpdate),
+                    profile.section(debug::ProfileSection::GPUUpload),
+                    profile.section(debug::ProfileSection::LODSelection),
+                    profile.section(debug::ProfileSection::DebugDraw));
                 window.setTitle(title);
             }
 
@@ -330,6 +374,11 @@ int main(int argc, char** argv)
                           << " cpuMemoryUsedBytes=" << stats.cpuMemoryUsedBytes << "\n";
                 break;
             }
+        }
+        if (profileCsv)
+        {
+            profileCsv.close();
+            std::cout << "Wrote " << profileFrameIndex << " frame timing rows to " << options.profileCsv << "\n";
         }
         // world (and the GPU resources it holds) is destroyed here, before
         // renderer, by declaration order — see the note above.

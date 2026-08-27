@@ -26,7 +26,7 @@ color-coded tile bounds. Title bar shows live streaming stats.*
 
 ## Status
 
-**Phase 12 of 14.** Complete: core spatial math; a binary tile format with
+**Phase 13 of 14.** Complete: core spatial math; a binary tile format with
 a JSON manifest and a `SpatialTileBuilder` CLI that generates a procedural
 city; a generic quadtree spatial index; distance/screen-space-error LOD
 selection with hysteresis; a multithreaded streaming manager (request
@@ -41,15 +41,18 @@ subsystems together itself; a **Unity native plugin**; an **Unreal native
 plugin**; and a **custom-engine integration** — validated against an
 independent DirectX 12 engine, linking `spatial_sdk` directly rather than
 through a C ABI, with no coordinate conversion needed since that engine
-shares the SDK's own right-handed/Y-up convention.
+shares the SDK's own right-handed/Y-up convention; and a built-in
+**CPU frame profiler** (`spatial::debug::Profiler`) that breaks down each
+`update()`/`render()` call by streaming, GPU upload, LOD selection, and
+debug-draw cost, exposed through `SpatialWorld::frameProfile()` and
+`StandaloneViewer`'s `--profile-csv` flag.
 
-181 automated SDK tests, all green. The viewer and both engine plugins are
+187 automated SDK tests, all green. The viewer and both engine plugins are
 runnable end to end. See [docs/architecture.md](docs/architecture.md) for
 the full design and phased development plan, and
 [CHANGELOG.md](CHANGELOG.md) for what landed in each phase.
 
-Not yet built: profiling tooling (Phase 13) and final portfolio polish
-(Phase 14).
+Not yet built: final portfolio polish (Phase 14).
 
 ## Planned capabilities
 
@@ -90,6 +93,7 @@ ctest --test-dir build -C Debug --output-on-failure
 - [Level of detail](docs/lod.md)
 - [Streaming](docs/streaming.md)
 - [Rendering](docs/rendering.md)
+- [Profiling](docs/profiling.md)
 - [Unity integration](docs/unity_integration.md)
 - [Unreal integration](docs/unreal_integration.md)
 - [Custom engine integration](docs/custom_engine_integration.md)

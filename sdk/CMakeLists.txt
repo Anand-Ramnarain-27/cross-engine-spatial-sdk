@@ -57,6 +57,7 @@ set(SPATIAL_SDK_PUBLIC_HEADERS
     include/spatial/rendering/GPUResource.h
     include/spatial/rendering/GPUUploadQueue.h
     include/spatial/debug/DebugRenderer.h
+    include/spatial/debug/Profiler.h
     include/spatial/SpatialWorld.h
 )
 
@@ -75,6 +76,7 @@ set(SPATIAL_SDK_SOURCES
     src/streaming/StreamingManager.cpp
     src/rendering/GPUUploadQueue.cpp
     src/debug/DebugRenderer.cpp
+    src/debug/Profiler.cpp
     src/SpatialWorld.cpp
 )
 

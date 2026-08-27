@@ -12,6 +12,7 @@
 #include "spatial/data/DatasetManifest.h"
 #include "spatial/data/TileIndex.h"
 #include "spatial/debug/DebugRenderer.h"
+#include "spatial/debug/Profiler.h"
 #include "spatial/lod/LODManager.h"
 #include "spatial/rendering/GPUResource.h"
 #include "spatial/rendering/GPUUploadQueue.h"
@@ -85,6 +86,10 @@ namespace spatial
         [[nodiscard]] bool debugVisualizationEnabled() const noexcept { return m_config.debugVisualizationEnabled; }
         void setDebugVisualizationEnabled(bool enabled) noexcept { m_config.debugVisualizationEnabled = enabled; }
 
+        // CPU timing for the most recently completed update()+render() pair
+        // — see docs/profiling.md. Zero-initialized before the first frame.
+        [[nodiscard]] const debug::FrameProfile& frameProfile() const noexcept { return m_profiler.lastFrame(); }
+
     private:
         // Every LOD's meshes are uploaded up front for a resident tile (the
         // tile file already contains them all — see docs/lod.md); which LOD
@@ -114,5 +119,7 @@ namespace spatial
 
         rendering::IRenderer* m_debugRendererTarget = nullptr;
         std::optional<debug::DebugRenderer> m_debugRenderer;
+
+        debug::Profiler m_profiler;
     };
 }

@@ -511,18 +511,37 @@ errors — and matched the rendered result on screen: solid, correctly
 shaded geometry inside the debug tile-bounds overlay, confirming the
 zero-conversion assumption held.
 
+## Profiling (Phase 13)
+
+`spatial::debug::Profiler` — always-on CPU frame timing built into
+`SpatialWorld`, not a bolt-on external tool. Placed in the Debug module
+alongside `DebugRenderer`, matching the module map above's original
+"statistics, profiling instrumentation" line. A fixed `ProfileSection`
+enum (`StreamingUpdate`, `GPUUpload`, `LODSelection`, `DebugDraw`) is
+measured via RAII scope guards (`ScopedSection`) inside `update()` and
+`render()`, on every exit path, and read back through
+`SpatialWorld::frameProfile()`.
+
+`StandaloneViewer --profile-csv <path>` exports one row per frame; run
+against the 1024-tile `BigCity` dataset it shows the expected shape —
+an initial-load spike, an upload-dominated ramp while streaming
+converges, then a steady ~1–2ms/frame dominated by LOD selection once
+`loadingTiles`/`requestedTiles` reach zero. See
+[profiling.md](profiling.md) for the full design and reading the output.
+
 ## Status
 
 This document will be extended as each phase lands. Current state: Phase
-12 (custom-engine integration, direct C++ linkage, validated against a
-real DirectX 12 engine) complete, on top of Phase 11 (Unreal native
-plugin + `USpatialWorldComponent`, compiled and run against real UE
-5.6.1), Phase 10 (Unity native plugin + C# integration, verified live in
-the Unity Editor), Phase 9 (standalone viewer, D3D11 backend,
-`SpatialWorld` public API façade, full Streaming+LOD+Rendering+Debug
-wiring, real per-dataset height bounds), and Phases 4–8. 181 automated
-SDK tests (the viewer and all three engine integrations are
-GPU/Editor-dependent and aren't part of that suite — see
-[rendering.md](rendering.md) for why platform backends are verified by
-actually running them instead). No profiling tooling (Phase 13) or final
-portfolio polish (Phase 14) exists yet.
+13 (CPU frame profiler built into `SpatialWorld`, verified against a real
+1024-tile dataset run) complete, on top of Phase 12 (custom-engine
+integration, direct C++ linkage, validated against a real DirectX 12
+engine), Phase 11 (Unreal native plugin + `USpatialWorldComponent`,
+compiled and run against real UE 5.6.1), Phase 10 (Unity native plugin +
+C# integration, verified live in the Unity Editor), Phase 9 (standalone
+viewer, D3D11 backend, `SpatialWorld` public API façade, full
+Streaming+LOD+Rendering+Debug wiring, real per-dataset height bounds),
+and Phases 4–8. 187 automated SDK tests (the viewer and all three engine
+integrations are GPU/Editor-dependent and aren't part of that suite —
+see [rendering.md](rendering.md) for why platform backends are verified
+by actually running them instead). No final portfolio polish
+(Phase 14) exists yet.

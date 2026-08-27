@@ -50,12 +50,17 @@ namespace spatial
 
     void SpatialWorld::update(const core::CameraParams& camera, rendering::IRenderer& renderer)
     {
+        m_profiler.beginFrame();
+
         if (!m_streamingManager.has_value())
         {
             return;
         }
 
-        m_streamingManager->update(camera);
+        {
+            const auto section = m_profiler.measure(debug::ProfileSection::StreamingUpdate);
+            m_streamingManager->update(camera);
+        }
 
         // Enqueue GPU uploads for tiles that just became resident (or
         // revive an entry mid-eviction-cleanup — see TileGPU::stillResident).
@@ -124,83 +129,97 @@ namespace spatial
             }
         }
 
-        m_uploadQueue.processQueue(renderer, m_config.maxGPUUploadsPerUpdate);
+        {
+            const auto section = m_profiler.measure(debug::ProfileSection::GPUUpload);
+            m_uploadQueue.processQueue(renderer, m_config.maxGPUUploadsPerUpdate);
+        }
     }
 
     void SpatialWorld::render(rendering::IRenderer& renderer, const core::CameraParams& camera)
     {
         if (!m_streamingManager.has_value())
         {
+            m_profiler.endFrame();
             return;
         }
 
-        for (const auto& [id, gpu] : m_gpuTiles)
         {
-            if (!gpu.ready() || !gpu.stillResident)
+            const auto section = m_profiler.measure(debug::ProfileSection::LODSelection);
+            for (const auto& [id, gpu] : m_gpuTiles)
             {
-                continue;
-            }
-            const data::Tile* tile = m_streamingManager->residentTile(id);
-            if (tile == nullptr)
-            {
-                continue;
-            }
-
-            std::vector<float> geometricErrors;
-            geometricErrors.reserve(tile->lods().size());
-            for (const data::TileLOD& lod : tile->lods())
-            {
-                geometricErrors.push_back(lod.geometricError);
-            }
-
-            const std::uint32_t rawLod = m_lodManager.selectLOD(id, tile->bounds().center(), geometricErrors, camera);
-            const std::size_t lodIndex = std::min<std::size_t>(rawLod, gpu.lodMeshes.size() - 1);
-
-            const std::vector<data::Mesh>& meshes = tile->lods()[lodIndex].meshes;
-            for (std::size_t meshIndex = 0; meshIndex < gpu.lodMeshes[lodIndex].size() && meshIndex < meshes.size(); ++meshIndex)
-            {
-                const int materialIndex = meshes[meshIndex].materialIndex;
-                rendering::MaterialHandle materialHandle{};
-                if (materialIndex >= 0 && static_cast<std::size_t>(materialIndex) < gpu.materials.size())
+                if (!gpu.ready() || !gpu.stillResident)
                 {
-                    materialHandle = gpu.materials[static_cast<std::size_t>(materialIndex)].handle();
+                    continue;
                 }
-                renderer.drawMesh(gpu.lodMeshes[lodIndex][meshIndex].handle(), materialHandle, core::Mat4::identity());
+                const data::Tile* tile = m_streamingManager->residentTile(id);
+                if (tile == nullptr)
+                {
+                    continue;
+                }
+
+                std::vector<float> geometricErrors;
+                geometricErrors.reserve(tile->lods().size());
+                for (const data::TileLOD& lod : tile->lods())
+                {
+                    geometricErrors.push_back(lod.geometricError);
+                }
+
+                const std::uint32_t rawLod = m_lodManager.selectLOD(id, tile->bounds().center(), geometricErrors, camera);
+                const std::size_t lodIndex = std::min<std::size_t>(rawLod, gpu.lodMeshes.size() - 1);
+
+                const std::vector<data::Mesh>& meshes = tile->lods()[lodIndex].meshes;
+                for (std::size_t meshIndex = 0; meshIndex < gpu.lodMeshes[lodIndex].size() && meshIndex < meshes.size(); ++meshIndex)
+                {
+                    const int materialIndex = meshes[meshIndex].materialIndex;
+                    rendering::MaterialHandle materialHandle{};
+                    if (materialIndex >= 0 && static_cast<std::size_t>(materialIndex) < gpu.materials.size())
+                    {
+                        materialHandle = gpu.materials[static_cast<std::size_t>(materialIndex)].handle();
+                    }
+                    renderer.drawMesh(gpu.lodMeshes[lodIndex][meshIndex].handle(), materialHandle, core::Mat4::identity());
+                }
             }
         }
 
         if (!m_config.debugVisualizationEnabled)
         {
+            m_profiler.endFrame();
             return;
         }
 
-        if (m_debugRendererTarget != &renderer)
         {
-            m_debugRendererTarget = &renderer;
-            m_debugRenderer.emplace(renderer);
-        }
+            const auto section = m_profiler.measure(debug::ProfileSection::DebugDraw);
 
-        for (const data::TileId& id : m_tileIndex->queryRadius(camera.position, m_config.streaming.streamingRadius))
-        {
-            // Prefer a resident tile's own (tightly-bounded) bounds over
-            // TileIndex's generic-height bounds — see docs/architecture.md's
-            // Phase 9 notes on the bug this avoids.
-            std::optional<core::AABB> bounds;
-            if (const data::Tile* resident = m_streamingManager->residentTile(id))
+            if (m_debugRendererTarget != &renderer)
             {
-                bounds = resident->bounds();
-            }
-            else
-            {
-                bounds = m_tileIndex->find(id);
+                m_debugRendererTarget = &renderer;
+                m_debugRenderer.emplace(renderer);
             }
 
-            if (bounds)
+            for (const data::TileId& id : m_tileIndex->queryRadius(camera.position, m_config.streaming.streamingRadius))
             {
-                m_debugRenderer->drawTileBounds(*bounds, m_streamingManager->stateOf(id));
+                // Prefer a resident tile's own (tightly-bounded) bounds over
+                // TileIndex's generic-height bounds — see docs/architecture.md's
+                // Phase 9 notes on the bug this avoids.
+                std::optional<core::AABB> bounds;
+                if (const data::Tile* resident = m_streamingManager->residentTile(id))
+                {
+                    bounds = resident->bounds();
+                }
+                else
+                {
+                    bounds = m_tileIndex->find(id);
+                }
+
+                if (bounds)
+                {
+                    m_debugRenderer->drawTileBounds(*bounds, m_streamingManager->stateOf(id));
+                }
             }
+            m_debugRenderer->flush();
         }
-        m_debugRenderer->flush();
+
+        m_profiler.endFrame();
     }
 
     streaming::StreamingStatistics SpatialWorld::statistics() const
